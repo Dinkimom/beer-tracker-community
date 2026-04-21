@@ -28,8 +28,8 @@
 ## Важные доработки (P1)
 
 1. **Лицензия в public export**
-   - Закрыто: в export подставляется Apache-2.0 `LICENSE`.
-   - В `.open-core-export/package.json` выставляется `"license": "Apache-2.0"`.
+   - Закрыто: в export подставляется проприетарный `LICENSE` (шаблон `scripts/open-core/community-core-LICENSE`, по смыслу как в корне репозитория).
+   - В `.open-core-export/package.json` выставляется `"license": "UNLICENSED"` (условия — в файле `LICENSE`).
 
 2. **Проверка политики `package.json` для public**
    - Сверить, корректно ли оставлять `"private": true` в публикуемом репозитории.

@@ -193,7 +193,8 @@ async function ensureCommunityExportMetadata(repoRoot: string, outDirAbs: string
   const exportPackageJsonAbs = path.join(outDirAbs, 'package.json');
   const packageJsonRaw = await readFile(exportPackageJsonAbs, 'utf8');
   const packageJson = JSON.parse(packageJsonRaw) as Record<string, unknown>;
-  packageJson.license = 'Apache-2.0';
+  // SPDX: proprietary grant; full terms in root `LICENSE` copied from `community-core-LICENSE`.
+  packageJson.license = 'UNLICENSED';
   await writeFile(exportPackageJsonAbs, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
 }
 
