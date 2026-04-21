@@ -20,7 +20,6 @@
     "AGENTS.md",
     "CONTRIBUTING.md",
     "Dockerfile",
-    "README.md",
     "docker-compose.yml",
     "docker-compose.dev.yml",
     "eslint.config.mjs",

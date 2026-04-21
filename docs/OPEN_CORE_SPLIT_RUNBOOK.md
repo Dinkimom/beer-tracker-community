@@ -45,7 +45,7 @@ pnpm build
 - нет `app/demo`, `app/api/demo`, `lib/demo`;
 - `env.example` соответствует on-prem-only политике;
 - нет следов private/enterprise/licensing папок;
-- есть обязательные файлы для public repo (README, CONTRIBUTING, LICENSE).
+- есть обязательные файлы для public repo (`README.md` из шаблона `scripts/open-core/community-core-README.md`, CONTRIBUTING, LICENSE).
 
 5. Вернуться в корень private:
 

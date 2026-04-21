@@ -190,6 +190,15 @@ async function ensureCommunityExportMetadata(repoRoot: string, outDirAbs: string
   await copyFile(communityLicenseAbs, path.join(outDirAbs, 'LICENSE'));
   copied.add('LICENSE');
 
+  const communityReadmeAbs = path.join(repoRoot, 'scripts/open-core/community-core-README.md');
+  try {
+    await stat(communityReadmeAbs);
+  } catch {
+    throw new Error(`Missing community README template: ${communityReadmeAbs}`);
+  }
+  await copyFile(communityReadmeAbs, path.join(outDirAbs, 'README.md'));
+  copied.add('README.md');
+
   const exportPackageJsonAbs = path.join(outDirAbs, 'package.json');
   const packageJsonRaw = await readFile(exportPackageJsonAbs, 'utf8');
   const packageJson = JSON.parse(packageJsonRaw) as Record<string, unknown>;
