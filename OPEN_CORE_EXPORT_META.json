@@ -1,0 +1,9 @@
+{
+  "builtAt": "2026-04-21T19:48:22.579Z",
+  "denyPrefixesSha256": "53b48739762dd50d1eee9fb05518f850f24117218525ae7282ba068bc63e37c1",
+  "dryRun": false,
+  "exportDir": ".open-core-export",
+  "filesCopied": 1051,
+  "manifestSha256": "532df5252446155eb70ef2b6c7f5c2063bc357fd56c1b1a375500a1e10a88b24",
+  "sourceCommit": ""
+}

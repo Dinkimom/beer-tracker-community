@@ -1,0 +1,276 @@
+import type { DomainRole, Platform, RoleCatalogEntry } from "@/lib/roles/catalog";
+import type { FormEvent } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
+
+import { useI18n } from "@/contexts/LanguageContext";
+
+import { RolesTabId, sortOrgRoles } from "../rolesPageConstants";
+
+export interface UseAdminOrgRolesParams {
+  organizationId: string;
+  roles: RoleCatalogEntry[];
+}
+
+export function useAdminOrgRoles({ organizationId, roles }: UseAdminOrgRolesParams) {
+  const { language, t } = useI18n();
+  const systemRoles = useMemo(() => roles.filter((r) => r.isSystem), [roles]);
+  const orgFromProps = useMemo(
+    () => roles.filter((r) => !r.isSystem).sort((a, b) => sortOrgRoles(a, b, language)),
+    [language, roles],
+  );
+
+  const [orgRoles, setOrgRoles] = useState<RoleCatalogEntry[]>(orgFromProps);
+  useEffect(() => {
+    setOrgRoles(orgFromProps);
+  }, [orgFromProps]);
+
+  const [newTitle, setNewTitle] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  const [slugLocked, setSlugLocked] = useState(false);
+  const [newDomainRole, setNewDomainRole] = useState<DomainRole>("developer");
+  const [newPlatforms, setNewPlatforms] = useState<Platform[]>([]);
+  const [createBusy, setCreateBusy] = useState(false);
+
+  const [editingSlug, setEditingSlug] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDomainRole, setEditDomainRole] = useState<DomainRole>("developer");
+  const [editPlatforms, setEditPlatforms] = useState<Platform[]>([]);
+  const [editBusy, setEditBusy] = useState(false);
+
+  const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const [activeRolesTab, setActiveRolesTab] = useState<RolesTabId>("organization");
+
+  const apiBase = `/api/admin/organizations/${organizationId}/org-roles`;
+
+  const beginEdit = useCallback((r: RoleCatalogEntry) => {
+    setEditingSlug(r.slug);
+    setEditTitle(r.title);
+    setEditDomainRole(r.domainRole);
+    setEditPlatforms([...r.platforms]);
+    setDeletingSlug(null);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingSlug(null);
+  }, []);
+
+  const toggleNewPlatform = useCallback((p: Platform) => {
+    if (newDomainRole !== "developer") return;
+    setNewPlatforms((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+    );
+  }, [newDomainRole]);
+
+  const toggleEditPlatform = useCallback((p: Platform) => {
+    if (editDomainRole !== "developer") return;
+    setEditPlatforms((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+    );
+  }, [editDomainRole]);
+
+  const setNewDomainRoleSafe = useCallback((v: DomainRole) => {
+    setNewDomainRole(v);
+    if (v !== "developer") setNewPlatforms([]);
+  }, []);
+
+  const setEditDomainRoleSafe = useCallback((v: DomainRole) => {
+    setEditDomainRole(v);
+    if (v !== "developer") setEditPlatforms([]);
+  }, []);
+
+  const submitCreate = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+      const slugNorm = newSlug.trim().toLowerCase();
+      const titleTrim = newTitle.trim();
+      if (!titleTrim || !slugNorm) {
+        toast.error(t("admin.rolesPage.titleAndSlugRequired"));
+        return;
+      }
+      setCreateBusy(true);
+      const optimistic: RoleCatalogEntry = {
+        domainRole: newDomainRole,
+        isSystem: false,
+        platforms: [...newPlatforms],
+        slug: slugNorm,
+        title: titleTrim,
+      };
+      const prevList = orgRoles;
+      setOrgRoles([...prevList, optimistic].sort((a, b) => sortOrgRoles(a, b, language)));
+      try {
+        const res = await fetch(apiBase, {
+          body: JSON.stringify({
+            domainRole: newDomainRole,
+            platforms: newPlatforms,
+            slug: slugNorm,
+            title: titleTrim,
+          }),
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        const json = (await res.json()) as { error?: string; role?: RoleCatalogEntry };
+        if (!res.ok) {
+          setOrgRoles(prevList);
+          toast.error(json.error ?? t("admin.rolesPage.createFailed"));
+          return;
+        }
+        if (json.role) {
+          setOrgRoles((list) => {
+            const rest = list.filter((r) => r.slug !== slugNorm);
+            return [...rest, json.role!].sort((a, b) => sortOrgRoles(a, b, language));
+          });
+        }
+        toast.success(t("admin.rolesPage.createSuccess"));
+        setNewTitle("");
+        setNewSlug("");
+        setSlugLocked(false);
+        setNewDomainRole("developer");
+        setNewPlatforms([]);
+      } catch {
+        setOrgRoles(prevList);
+        toast.error(t("admin.common.networkError"));
+      } finally {
+        setCreateBusy(false);
+      }
+    },
+    [
+      apiBase,
+      language,
+      newDomainRole,
+      newPlatforms,
+      newSlug,
+      newTitle,
+      orgRoles,
+      t,
+    ],
+  );
+
+  const submitEdit = useCallback(
+    async (slug: string) => {
+      setEditBusy(true);
+      const prevList = orgRoles;
+      setOrgRoles((list) =>
+        list
+          .map((r) =>
+            r.slug === slug
+              ? {
+                  ...r,
+                  domainRole: editDomainRole,
+                  platforms: [...editPlatforms],
+                  title: editTitle.trim(),
+                }
+              : r,
+          )
+          .sort((a, b) => sortOrgRoles(a, b, language)),
+      );
+      try {
+        const res = await fetch(`${apiBase}/${encodeURIComponent(slug)}`, {
+          body: JSON.stringify({
+            domainRole: editDomainRole,
+            platforms: editPlatforms,
+            title: editTitle.trim(),
+          }),
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          method: "PATCH",
+        });
+        const json = (await res.json()) as { error?: string; role?: RoleCatalogEntry };
+        if (!res.ok) {
+          setOrgRoles(prevList);
+          toast.error(json.error ?? t("admin.rolesPage.saveFailed"));
+          return;
+        }
+        if (json.role) {
+          setOrgRoles((list) =>
+            list.map((r) => (r.slug === slug ? json.role! : r)).sort((a, b) => sortOrgRoles(a, b, language)),
+          );
+        }
+        toast.success(t("admin.rolesPage.saveSuccess"));
+        setEditingSlug(null);
+      } catch {
+        setOrgRoles(prevList);
+        toast.error(t("admin.common.networkError"));
+      } finally {
+        setEditBusy(false);
+      }
+    },
+    [apiBase, editDomainRole, editPlatforms, editTitle, language, orgRoles, t],
+  );
+
+  const confirmDelete = useCallback(
+    async (slug: string) => {
+      setDeleteBusy(true);
+      const prevList = orgRoles;
+      setOrgRoles((list) => list.filter((r) => r.slug !== slug));
+      try {
+        const res = await fetch(`${apiBase}/${encodeURIComponent(slug)}`, {
+          credentials: "include",
+          method: "DELETE",
+        });
+        const json = (await res.json()) as { error?: string };
+        if (!res.ok) {
+          setOrgRoles(prevList);
+          toast.error(json.error ?? t("admin.rolesPage.deleteFailed"));
+          return;
+        }
+        toast.success(t("admin.rolesPage.deleteSuccess"));
+        setDeletingSlug(null);
+      } catch {
+        setOrgRoles(prevList);
+        toast.error(t("admin.common.networkError"));
+      } finally {
+        setDeleteBusy(false);
+      }
+    },
+    [apiBase, orgRoles, t],
+  );
+
+  const startDelete = useCallback((slug: string) => {
+    setDeletingSlug(slug);
+    setEditingSlug(null);
+  }, []);
+
+  const cancelDelete = useCallback(() => {
+    setDeletingSlug(null);
+  }, []);
+
+  return {
+    activeRolesTab,
+    beginEdit,
+    cancelDelete,
+    cancelEdit,
+    confirmDelete,
+    createBusy,
+    deleteBusy,
+    deletingSlug,
+    editBusy,
+    editDomainRole,
+    editingSlug,
+    editPlatforms,
+    editTitle,
+    newDomainRole,
+    newPlatforms,
+    newSlug,
+    newTitle,
+    orgRoles,
+    setActiveRolesTab,
+    setEditTitle,
+    setNewSlug,
+    setNewTitle,
+    setSlugLocked,
+    slugLocked,
+    startDelete,
+    submitCreate,
+    submitEdit,
+    systemRoles,
+    toggleEditPlatform,
+    toggleNewPlatform,
+    setEditDomainRoleSafe,
+    setNewDomainRoleSafe,
+  };
+}

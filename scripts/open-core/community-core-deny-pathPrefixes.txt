@@ -1,0 +1,26 @@
+.git/
+.github/workflows/deploy-on-tag.yml
+.next/
+.open-core-export/
+.pnpm-store/
+.spec-workflow/
+.vercel/
+.cursor/
+node_modules/
+coverage/
+storybook-static/
+audit.log
+
+# Шаблон env только для приватной сборки экспорта; в артефакте остаётся корневой env.example
+scripts/open-core/community-core-env.example
+scripts/open-core/community-core-LICENSE
+
+# Demo stack is not part of community-core (on-prem product build)
+app/demo/
+app/api/demo/
+lib/demo/
+
+# Reserved for future private-only overlays in the monorepo split
+private/
+enterprise/
+licensing/

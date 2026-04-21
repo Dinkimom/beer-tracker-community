@@ -1,0 +1,116 @@
+'use client';
+
+import type { SwimlaneInProgressFactSegment } from '@/features/swimlane/utils/mergeInProgressDurationsForAssignee';
+import type { StatusPhaseCell } from '@/lib/planner-timeline';
+import type { Developer, Task } from '@/types';
+import type { ChangelogEntry, IssueComment } from '@/types/tracker';
+
+import { useMemo } from 'react';
+
+import { Icon } from '@/components/Icon';
+import { TextTooltip } from '@/components/TextTooltip';
+import { ZIndex } from '@/constants';
+import { SWIMLANE_FACT_MIN_GAP_PX } from '@/features/swimlane/utils/in-progress-fact/swimlaneInProgressFactLayerConstants';
+import { mergeIssueDataForSwimlaneFactTooltip } from '@/features/swimlane/utils/mergeInProgressDurationsForAssignee';
+import { getStatusColors } from '@/utils/statusColors';
+
+import { SwimlaneFactPhaseTooltip } from './SwimlaneFactPhaseTooltip';
+
+export function SwimlaneClosedFactMarker({
+  assigneeRole,
+  barDomId,
+  changelogsByTaskId,
+  commentsByTaskId,
+  developerMap,
+  hideTaskSummary,
+  laneRowHeight,
+  layerId,
+  onFactSegmentHover,
+  phase,
+  seg,
+  tasksMap,
+}: {
+  assigneeRole: Developer['role'];
+  barDomId: string;
+  changelogsByTaskId: Map<string, ChangelogEntry[]>;
+  commentsByTaskId: Map<string, IssueComment[]>;
+  developerMap: Map<string, Developer>;
+  hideTaskSummary: boolean;
+  laneRowHeight: number;
+  layerId: string;
+  onFactSegmentHover?: (taskId: string | null) => void;
+  phase: StatusPhaseCell;
+  seg: SwimlaneInProgressFactSegment;
+  tasksMap: Map<string, Task>;
+}) {
+  const { changelog, comments: issueComments } = useMemo(
+    () =>
+      mergeIssueDataForSwimlaneFactTooltip(
+        seg.taskId,
+        assigneeRole,
+        tasksMap,
+        changelogsByTaskId,
+        commentsByTaskId
+      ),
+    [assigneeRole, changelogsByTaskId, commentsByTaskId, seg.taskId, tasksMap]
+  );
+
+  const statusColors = getStatusColors(phase.statusKey);
+  const verticalInset = 1;
+  const barHeight = Math.max(SWIMLANE_FACT_MIN_GAP_PX, laneRowHeight - verticalInset * 2);
+  const markerSize = barHeight;
+  const bgClass = statusColors.bgDark
+    ? `${statusColors.bg} ${statusColors.bgDark}`
+    : statusColors.bg;
+  const borderClass = statusColors.borderDark
+    ? `${statusColors.border} ${statusColors.borderDark}`
+    : statusColors.border;
+  const statusTooltipId = `${layerId}-closed-${seg.taskId}-${phase.startCell}-${phase.endCell}`;
+
+  return (
+    <div
+      className="pointer-events-none flex shrink-0 items-center justify-center self-center"
+      style={{ width: markerSize, zIndex: ZIndex.contentOverlay }}
+    >
+      <TextTooltip
+        content={
+          <SwimlaneFactPhaseTooltip
+            changelog={changelog}
+            developerMap={developerMap}
+            factualEndTimeMs={seg.endTimeMs}
+            hideTaskSummary={hideTaskSummary}
+            issueComments={issueComments}
+            phase={phase}
+            taskId={seg.taskId}
+            tasksMap={tasksMap}
+          />
+        }
+        contentClassName="!bg-white dark:!bg-gray-800 !text-gray-900 dark:!text-gray-100 !p-0 !shadow-xl !border !border-gray-200 dark:!border-gray-700 !rounded-lg"
+        delayDuration={200}
+        side="bottom"
+        singleInGroupId={statusTooltipId}
+      >
+        <div
+          aria-label={`${phase.statusKey}: закрыто`}
+          className={`pointer-events-auto flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 opacity-60 shadow-sm transition-opacity hover:opacity-100 cursor-pointer box-border ${bgClass} ${borderClass}`}
+          id={barDomId}
+          role="img"
+          style={{
+            width: markerSize,
+            height: markerSize,
+          }}
+          onPointerEnter={
+            onFactSegmentHover ? () => onFactSegmentHover(seg.taskId) : undefined
+          }
+          onPointerLeave={onFactSegmentHover ? () => onFactSegmentHover(null) : undefined}
+        >
+          <Icon
+            className={`shrink-0 ${statusColors.text} ${statusColors.textDark ?? ''}`}
+            name="check"
+            size="sm"
+          />
+        </div>
+      </TextTooltip>
+    </div>
+  );
+}

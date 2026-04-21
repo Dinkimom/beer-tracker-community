@@ -1,0 +1,80 @@
+name: Publish community-core
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  verify-community-export:
+    if: ${{ github.ref == 'refs/heads/master' && vars.OPEN_CORE_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build community export artifact
+        run: pnpm open-core:export -- --out-dir=.open-core-export
+
+      - name: Verify exported project
+        run: |
+          cd .open-core-export
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm build
+
+  publish:
+    if: ${{ github.ref == 'refs/heads/master' && vars.OPEN_CORE_PUBLISH == 'true' }}
+    needs: verify-community-export
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, typecheck, test
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm vitest run
+
+      - name: Publish to public master
+        env:
+          PUBLIC_CORE_REPO: ${{ secrets.PUBLIC_CORE_REPO }}
+          PUBLIC_CORE_PUSH_TOKEN: ${{ secrets.PUBLIC_CORE_PUSH_TOKEN }}
+        run: |
+          bash scripts/open-core/publish-community-core.sh
