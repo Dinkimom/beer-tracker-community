@@ -81,7 +81,8 @@ export async function POST(request: Request) {
   if (setupState.initialized) {
     return NextResponse.json(
       {
-        error: 'Самостоятельная регистрация отключена. Попросите администратора отправить приглашение.',
+        error:
+          'Самостоятельная регистрация отключена. Попросите администратора добавить вас в команду и войдите по OAuth-токену трекера на странице настройки.',
       },
       { status: 403 }
     );
@@ -184,13 +185,19 @@ export async function POST(request: Request) {
   } catch (err) {
     if (isOnPremAlreadyInitialized(err)) {
       return NextResponse.json(
-        { error: 'Инициализация уже выполнена. Войдите или запросите приглашение.' },
+        {
+          error:
+            'Инициализация уже выполнена. Войдите или попросите администратора добавить вас в команду.',
+        },
         { status: 409 }
       );
     }
     if (isUniqueViolation(err)) {
       return NextResponse.json(
-        { error: 'Инициализация уже выполнена. Войдите или запросите приглашение.' },
+        {
+          error:
+            'Инициализация уже выполнена. Войдите или попросите администратора добавить вас в команду.',
+        },
         { status: 409 }
       );
     }

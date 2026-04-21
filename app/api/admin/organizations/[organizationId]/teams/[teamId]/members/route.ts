@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { requireTeamManagementAccess, requireTenantWithAdminProfile } from '@/lib/api-tenant';
-import { findUserByEmail, findUserById } from '@/lib/auth';
-import { checkInvitationCreateAllowed } from '@/lib/invitations/invitationCreateRateLimit';
-import { createOrganizationInvitation } from '@/lib/organizations/invitationService';
+import { findUserById } from '@/lib/auth';
+import {
+  AddTrackerTeamMemberError,
+  addTrackerPersonToTeamWithProductUser,
+} from '@/lib/onPrem/addTrackerPersonToTeamWithProductUser';
 import { invitedTeamRoleFromCatalogRoleSlug } from '@/lib/organizations/invitedTeamRoleFromCatalogSlug';
 import { findOrganizationMembership } from '@/lib/organizations/organizationMembersRepository';
 import {
@@ -16,11 +18,9 @@ import {
   addTeamMember,
   enrichTeamMembersDisplayNamesFromTracker,
   findStaffByOrganizationAndEmailNorm,
-  findStaffByTrackerUserId,
   findTeamById,
   insertStaff,
   listTeamMembersWithStaff,
-  removeTeamMember,
 } from '@/lib/staffTeams';
 
 const UuidSchema = z.string().uuid();
@@ -101,7 +101,7 @@ export async function GET(
 /**
  * POST /api/admin/organizations/[organizationId]/teams/[teamId]/members
  * - `user_id`: пользователь уже в организации (без команды) — в состав команды и права планера, без приглашения.
- * - `tracker_user_id` + `email`: из трекера — в состав и приглашение в продукт.
+ * - `tracker_user_id` + `email`: из трекера — в состав команды и сразу учётка продукта для планера (без приглашений).
  * Роль каталога `teamlead` → тимлид в планере, иначе участник.
  */
 export async function POST(
@@ -204,62 +204,20 @@ export async function POST(
   }
 
   const emailStr = email!;
-  const emailNorm = emailStr.trim().toLowerCase();
-  const existingUser = await findUserByEmail(emailNorm);
-  if (existingUser) {
-    const om = await findOrganizationMembership(orgId, existingUser.id);
-    if (om) {
-      return NextResponse.json(
-        {
-          error:
-            'Этот email уже в организации. Назначьте команду в разделе «Пользователи», если нужно.',
-        },
-        { status: 409 }
-      );
-    }
-  }
-
-  const rate = checkInvitationCreateAllowed(orgId, auth.ctx.userId);
-  if (!rate.ok) {
-    const headers =
-      rate.retryAfterSec != null ? { 'Retry-After': String(rate.retryAfterSec) } : undefined;
-    return NextResponse.json(
-      { error: 'Слишком много приглашений за час, попробуйте позже' },
-      { headers, status: 429 }
-    );
-  }
-
-  let staffRow = await findStaffByTrackerUserId(orgId, trackerUserId!);
-  if (!staffRow) {
-    staffRow = await insertStaff(orgId, {
-      display_name: display_name?.trim() || trackerUserId!,
-      email: emailStr,
-      tracker_user_id: trackerUserId!,
-    });
-  }
-
-  const staffId = staffRow.id;
-  const member = await addTeamMember(orgId, teamId, staffId, roleSlug ?? null);
-  if (!member) {
-    return NextResponse.json(
-      { error: 'Не удалось добавить: команда или сотрудник не найдены' },
-      { status: 404 }
-    );
-  }
-
   try {
-    await createOrganizationInvitation({
-      createdByUserId: auth.ctx.userId,
-      email: emailStr,
-      invitedTeamRole: invitedTeamRole,
+    const { member } = await addTrackerPersonToTeamWithProductUser({
+      displayName: display_name,
+      emailStr,
       organizationId: orgId,
+      roleSlug: roleSlug ?? null,
       teamId,
+      trackerUserId: trackerUserId!,
     });
+    return NextResponse.json({ member }, { status: 201 });
   } catch (e) {
-    await removeTeamMember(orgId, teamId, staffId);
-    const msg = e instanceof Error ? e.message : 'Не удалось отправить приглашение';
-    return NextResponse.json({ error: msg }, { status: 400 });
+    if (e instanceof AddTrackerTeamMemberError) {
+      return NextResponse.json({ error: e.message }, { status: e.httpStatus });
+    }
+    throw e;
   }
-
-  return NextResponse.json({ member }, { status: 201 });
 }

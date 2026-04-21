@@ -1,4 +1,5 @@
 -- Системная организация для /demo/planner (tenant в БД без ручного DEMO_PRODUCT_ORGANIZATION_ID).
+-- On-prem: строка удаляется при старте приложения (APP_DEPLOYMENT_MODE=onprem), см. removeDemoSystemOrganizationForOnPrem.
 
 SET search_path TO beer_tracker;
 

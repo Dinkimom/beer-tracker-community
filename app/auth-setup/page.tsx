@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import { BeerLottie } from '@/components/BeerLottie';
 import { Button } from '@/components/Button';
@@ -25,6 +25,68 @@ export default function AuthSetupPage() {
   const [showToken, setShowToken] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [onPremGate, setOnPremGate] = useState<{
+    firstRun: boolean;
+    loading: boolean;
+    organizationId: string | null;
+  }>({ loading: true, firstRun: false, organizationId: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadOnPremOrg() {
+      try {
+        const setupRes = await fetch('/api/onprem/setup-state', { credentials: 'include' });
+        if (!setupRes.ok) {
+          if (!cancelled) {
+            setOnPremGate({ loading: false, firstRun: false, organizationId: null });
+          }
+          return;
+        }
+        const setup = (await setupRes.json()) as { hasUsers?: boolean; onPremMode?: boolean };
+        if (!setup.onPremMode) {
+          if (!cancelled) {
+            setOnPremGate({ loading: false, firstRun: false, organizationId: null });
+          }
+          return;
+        }
+        if (setup.hasUsers !== true) {
+          if (!cancelled) {
+            setOnPremGate({ loading: false, firstRun: true, organizationId: null });
+          }
+          return;
+        }
+        const orgRes = await fetch('/api/onprem/default-organization', { credentials: 'include' });
+        if (!orgRes.ok) {
+          if (!cancelled) {
+            setOnPremGate({ loading: false, firstRun: false, organizationId: null });
+          }
+          return;
+        }
+        const orgJson = (await orgRes.json()) as { organizationId?: string };
+        if (!cancelled) {
+          setOnPremGate({
+            firstRun: false,
+            loading: false,
+            organizationId: orgJson.organizationId?.trim() || null,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setOnPremGate({ loading: false, firstRun: false, organizationId: null });
+        }
+      }
+    }
+    void loadOnPremOrg();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!onPremGate.loading && onPremGate.firstRun) {
+      router.replace('/register?next=/admin');
+    }
+  }, [onPremGate.firstRun, onPremGate.loading, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -32,7 +94,8 @@ export default function AuthSetupPage() {
     if (!localToken.trim()) {
       return;
     }
-    if (!productTenant.activeOrganizationId) {
+    const orgIdForToken = productTenant.activeOrganizationId ?? onPremGate.organizationId;
+    if (!orgIdForToken) {
       setError(t('auth.setup.chooseOrganizationFirst'));
       return;
     }
@@ -43,7 +106,7 @@ export default function AuthSetupPage() {
     try {
       // Валидируем токен перед сохранением
       const result = await validateToken(localToken, {
-        organizationId: productTenant.activeOrganizationId,
+        organizationId: orgIdForToken,
       });
 
       if (!result.valid) {
@@ -52,8 +115,26 @@ export default function AuthSetupPage() {
         return;
       }
 
+      if (onPremGate.organizationId && !productTenant.signedIn) {
+        const sessionRes = await fetch('/api/auth/onprem/tracker-session', {
+          body: JSON.stringify({
+            organizationId: orgIdForToken,
+            token: localToken.trim(),
+          }),
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        });
+        const sessionJson = (await sessionRes.json()) as { error?: string };
+        if (!sessionRes.ok) {
+          setError(sessionJson.error ?? t('auth.setup.validationError'));
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Если токен валидный, сохраняем его
-      setToken(localToken.trim(), productTenant.activeOrganizationId);
+      setToken(localToken.trim(), orgIdForToken);
 
       // Небольшая задержка для сохранения в localStorage
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -64,18 +145,29 @@ export default function AuthSetupPage() {
       console.error('Error validating token:', error);
       setError(t('auth.setup.validationError'));
       setIsLoading(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const onPremGateResolved = !onPremGate.loading;
+  const showAuthSetupSpinner =
+    !onPremGateResolved ||
+    onPremGate.firstRun ||
+    (productTenant.sessionLoading && !onPremGate.organizationId && !onPremGate.firstRun);
+
   let cardInner: ReactNode;
-  if (productTenant.sessionLoading) {
+  if (showAuthSetupSpinner) {
     cardInner = (
       <div className="p-12 flex flex-col items-center gap-4">
         <Icon className="h-10 w-10 animate-spin text-amber-600" name="loader" />
         <p className="text-sm text-gray-600 dark:text-gray-300">{t('auth.setup.sessionLoading')}</p>
       </div>
     );
-  } else if (!productTenant.signedIn) {
+  } else if (
+    !productTenant.signedIn &&
+    !(onPremGate.organizationId && onPremGateResolved)
+  ) {
     cardInner = (
       <div className="p-8 text-center space-y-4">
         <p className="text-gray-700 dark:text-gray-200">
@@ -89,7 +181,7 @@ export default function AuthSetupPage() {
         </Link>
       </div>
     );
-  } else if (productTenant.organizations.length === 0) {
+  } else if (productTenant.signedIn && productTenant.organizations.length === 0) {
     cardInner = (
       <div className="p-8 text-center space-y-2">
         <p className="text-gray-700 dark:text-gray-200">
@@ -103,12 +195,14 @@ export default function AuthSetupPage() {
   } else {
     cardInner = (
       <>
-        <ProductPlannerTenantBar
-          activeOrganizationId={productTenant.activeOrganizationId}
-          organizations={productTenant.organizations}
-          sessionLoading={productTenant.sessionLoading}
-          onOrganizationChange={productTenant.setActiveOrganizationId}
-        />
+        {productTenant.organizations.length > 0 ? (
+          <ProductPlannerTenantBar
+            activeOrganizationId={productTenant.activeOrganizationId}
+            organizations={productTenant.organizations}
+            sessionLoading={productTenant.sessionLoading}
+            onOrganizationChange={productTenant.setActiveOrganizationId}
+          />
+        ) : null}
         <form className="p-8 pt-6" onSubmit={handleSubmit}>
           {/* Информационный блок */}
           <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/25 border border-amber-200/80 dark:border-amber-700/50 rounded-xl">
@@ -181,7 +275,11 @@ export default function AuthSetupPage() {
           {/* Кнопка отправки */}
           <Button
             className="w-full !rounded-xl !border-0 !bg-amber-500 py-3.5 !text-sm !font-semibold !shadow-lg !shadow-amber-500/25 hover:!bg-amber-600 active:scale-[0.98] disabled:!scale-100 disabled:!cursor-not-allowed disabled:!bg-gray-400 disabled:!shadow-none dark:!shadow-amber-500/10 dark:disabled:!bg-gray-500"
-            disabled={!localToken.trim() || isLoading || !productTenant.activeOrganizationId}
+            disabled={
+              !localToken.trim() ||
+              isLoading ||
+              !(productTenant.activeOrganizationId ?? onPremGate.organizationId)
+            }
             type="submit"
             variant="primary"
           >
@@ -198,6 +296,17 @@ export default function AuthSetupPage() {
             )}
           </Button>
         </form>
+        <div className="border-t border-gray-200/80 px-8 pb-8 pt-5 text-center dark:border-gray-600/80">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span>{t('auth.setup.adminLoginHint')}</span>{' '}
+            <Link
+              className="font-semibold text-amber-600 hover:underline dark:text-amber-400"
+              href="/login?next=/admin"
+            >
+              {t('auth.setup.adminLoginLink')}
+            </Link>
+          </p>
+        </div>
       </>
     );
   }

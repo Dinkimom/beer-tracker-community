@@ -45,8 +45,9 @@ function bypassTrackerToken(pathname: string): boolean {
 }
 
 /**
- * Компонент для защиты маршрутов, требующих авторизации
- * Перенаправляет на /auth-setup, если токен не настроен
+ * Компонент для защиты маршрутов, требующих OAuth-токен трекера в браузере.
+ * On-prem до инициализации БД — сразу на первичную регистрацию (`/register?next=/admin`),
+ * иначе при отсутствии токена — на `/auth-setup`.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
   const { t } = useI18n();
@@ -64,9 +65,40 @@ export function AuthGuard({ children }: AuthGuardProps) {
       return;
     }
 
-    if (!usableTrackerToken || usableTrackerToken.trim() === '') {
-      router.push('/auth-setup');
+    if (usableTrackerToken && usableTrackerToken.trim() !== '') {
+      return;
     }
+
+    let cancelled = false;
+    async function resolveMissingTrackerToken() {
+      try {
+        const res = await fetch('/api/onprem/setup-state', { credentials: 'include' });
+        if (cancelled) {
+          return;
+        }
+        if (!res.ok) {
+          router.push('/auth-setup');
+          return;
+        }
+        const data = (await res.json()) as { hasUsers?: boolean; onPremMode?: boolean };
+        if (cancelled) {
+          return;
+        }
+        if (data.onPremMode && data.hasUsers !== true) {
+          router.replace('/register?next=/admin');
+          return;
+        }
+        router.push('/auth-setup');
+      } catch {
+        if (!cancelled) {
+          router.push('/auth-setup');
+        }
+      }
+    }
+    void resolveMissingTrackerToken();
+    return () => {
+      cancelled = true;
+    };
   }, [isMounted, pathname, router, usableTrackerToken]);
 
   // До монтирования рендерим тот же UI, что и на сервере (избегаем hydration mismatch)

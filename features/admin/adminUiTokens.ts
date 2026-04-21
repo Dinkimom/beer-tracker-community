@@ -30,11 +30,11 @@ export const adminListRowLayoutMember =
  * Колонки фиксированы, чтобы строки не «ездили» при скрытии блока приглашения.
  */
 export const adminTeamRosterGrid =
-  'grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_13rem_minmax(18rem,28rem)_2.75rem] sm:gap-x-5 sm:gap-y-0 sm:items-center';
+  'grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_13rem_minmax(18rem,28rem)_minmax(3.25rem,3.75rem)] sm:gap-x-5 sm:gap-y-0 sm:items-center';
 
 /** Заголовок над списком состава (те же колонки, что у adminTeamRosterGrid). */
 export const adminTeamRosterTableHeader =
-  'hidden border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400 sm:grid sm:grid-cols-[minmax(0,1fr)_13rem_minmax(18rem,28rem)_2.75rem] sm:gap-x-5 sm:items-center';
+  'hidden border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400 sm:grid sm:grid-cols-[minmax(0,1fr)_13rem_minmax(18rem,28rem)_minmax(3.25rem,3.75rem)] sm:gap-x-5 sm:items-center';
 
 /** Сгруппированный список (статусы по категориям): внешняя обёртка */
 export const adminListGroupedShell =

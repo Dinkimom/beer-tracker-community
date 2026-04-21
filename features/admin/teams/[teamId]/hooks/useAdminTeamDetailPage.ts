@@ -339,31 +339,32 @@ export function useAdminTeamDetailPage({
       }
       setInviteBusyStaffId(staffId);
       try {
-        const body: Record<string, unknown> = {
-          email: trimmed,
-          invited_team_role: invitedTeamRole,
-          team_id: initialTeam.id,
-        };
         const tid = trackerContext?.tracker_user_id?.trim();
-        if (tid) {
-          body.tracker_user_id = tid;
-          const name = trackerContext?.display_name?.trim();
-          if (name) {
-            body.display_name = name;
-          }
+        if (!tid) {
+          toast.error(t("admin.teamDetail.noTrackerIdForDirectAdd"));
+          return;
         }
-        const res = await fetch(`/api/admin/organizations/${orgId}/invitations`, {
-          body: JSON.stringify(body),
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
+        const body: Record<string, unknown> = {
+          display_name: trackerContext?.display_name?.trim() || undefined,
+          email: trimmed,
+          role_slug: invitedTeamRole === "team_lead" ? "teamlead" : null,
+          tracker_user_id: tid,
+        };
+        const res = await fetch(
+          `/api/admin/organizations/${orgId}/teams/${initialTeam.id}/members`,
+          {
+            body: JSON.stringify(body),
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          },
+        );
         const json = (await res.json()) as { error?: string };
         if (!res.ok) {
           toast.error(json.error ?? t("admin.teamDetail.inviteSendFailed"));
           return;
         }
-        toast.success(t("admin.teamDetail.inviteSent"));
+        toast.success(t("admin.teamDetail.userAddedToTeam"));
         const refreshRes = await fetch(
           `/api/admin/organizations/${orgId}/teams/${initialTeam.id}/members`,
           { credentials: "include" },

@@ -3,6 +3,10 @@ import { query } from '@/lib/db';
 export interface OnPremSetupState {
   hasOrganizations: boolean;
   hasUsers: boolean;
+  /**
+   * Есть хотя бы одна учётная запись продукта (`users`).
+   * Не путать с «в БД есть строка organizations»: без пользователя онбординг админа ещё не завершён.
+   */
   initialized: boolean;
 }
 
@@ -23,6 +27,6 @@ export async function readOnPremSetupState(): Promise<OnPremSetupState> {
   return {
     hasOrganizations,
     hasUsers,
-    initialized: hasOrganizations || hasUsers,
+    initialized: hasUsers,
   };
 }

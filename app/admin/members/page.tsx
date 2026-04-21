@@ -4,11 +4,7 @@ import { Suspense } from 'react';
 import { AdminOrganizationUsersClient } from '@/features/admin/members/AdminOrganizationUsersClient';
 import { getCachedAdminOrganizationContext } from '@/lib/access/adminOrganizationContext';
 import { getVerifiedProductUserIdFromServerCookies } from '@/lib/auth';
-import {
-  listOrganizationMemberDirectory,
-  listPendingInvitationsWithoutOrgMembership,
-  parseMemberDirectoryTeamsJson,
-} from '@/lib/organizations';
+import { listOrganizationMemberDirectory, parseMemberDirectoryTeamsJson } from '@/lib/organizations';
 import { listTeams } from '@/lib/staffTeams';
 
 export default async function MembersPage() {
@@ -25,9 +21,8 @@ export default async function MembersPage() {
 
   const connectOrgId = adminOrg.organization_id;
 
-  const [directoryRows, pendingInviteRows, rawTeams] = await Promise.all([
+  const [directoryRows, rawTeams] = await Promise.all([
     listOrganizationMemberDirectory(connectOrgId),
-    listPendingInvitationsWithoutOrgMembership(connectOrgId),
     listTeams(connectOrgId, { activeOnly: false }),
   ]);
 
@@ -44,15 +39,6 @@ export default async function MembersPage() {
     })),
     userId: r.user_id,
   }));
-  const initialPendingInvitations = pendingInviteRows.map((p) => ({
-    createdAt: new Date(p.created_at).toISOString(),
-    email: p.email,
-    expiresAt: new Date(p.expires_at).toISOString(),
-    id: p.id,
-    invitedTeamRole: p.invited_team_role,
-    teamId: p.team_id,
-    teamTitle: p.team_title,
-  }));
   const initialTeams = rawTeams.map((t) => ({
     active: t.active,
     id: t.id,
@@ -64,7 +50,6 @@ export default async function MembersPage() {
       <AdminOrganizationUsersClient
         currentUserId={userId}
         initialMembers={initialMembers}
-        initialPendingInvitations={initialPendingInvitations}
         initialTeams={initialTeams}
         orgId={connectOrgId}
       />

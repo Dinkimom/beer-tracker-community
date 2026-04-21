@@ -21,6 +21,6 @@ export async function GET() {
     hasOrganizations: state.hasOrganizations,
     hasUsers: state.hasUsers,
     initialized: state.initialized,
-    selfRegistrationAllowed: !state.initialized,
+    selfRegistrationAllowed: !state.hasUsers,
   });
 }

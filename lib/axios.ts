@@ -88,10 +88,15 @@ beerTrackerApi.interceptors.response.use(
     const status = error?.response?.status as number | undefined;
     if (status === 401 && typeof window !== 'undefined') {
       const { pathname, search } = window.location;
-      const isAuthPage = pathname === '/login' || pathname === '/register';
+      const isAuthPage =
+        pathname === '/login' || pathname === '/register' || pathname === '/auth-setup';
       if (!isAuthPage) {
         const next = encodeURIComponent(`${pathname}${search}`);
-        window.location.assign(`/login?next=${next}`);
+        if (pathname.startsWith('/admin')) {
+          window.location.assign(`/login?next=${next}`);
+        } else {
+          window.location.assign(`/auth-setup?next=${next}`);
+        }
       }
     }
     return Promise.reject(error);

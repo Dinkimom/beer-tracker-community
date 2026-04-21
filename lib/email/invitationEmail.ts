@@ -5,6 +5,7 @@
 
 import nodemailer from 'nodemailer';
 
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { readInvitationSmtpEnv } from '@/lib/email/invitationSmtpConfig';
 
 export function logInvitationAcceptUrl(email: string, acceptUrl: string): void {
@@ -224,6 +225,9 @@ async function runInvitationEmailDelivery(input: ScheduleInvitationEmailInput): 
  * Без SMTP или при ошибке — полная ссылка в логе для ручной передачи.
  */
 export function scheduleInvitationEmailDelivery(input: ScheduleInvitationEmailInput): void {
+  if (isOnPremMode()) {
+    return;
+  }
   runInvitationEmailDelivery(input).catch((err) => {
     console.error('[invitation] доставка приглашения', err);
   });

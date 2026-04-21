@@ -4,7 +4,7 @@
 
 import type { TeamMemberRow, TeamMemberWithStaffRow } from './types';
 
-import { query } from '@/lib/db';
+import { pool, qualifyBeerTrackerTables, query } from '@/lib/db';
 
 export async function listTeamMembersWithStaff(
   organizationId: string,
@@ -67,6 +67,20 @@ export async function listTeamMembersWithStaff(
   return res.rows;
 }
 
+export async function listTeamIdsForStaffInOrganization(
+  organizationId: string,
+  staffId: string
+): Promise<string[]> {
+  const res = await query<{ team_id: string }>(
+    `SELECT tm.team_id
+     FROM team_members tm
+     INNER JOIN teams t ON t.id = tm.team_id AND t.organization_id = $1
+     WHERE tm.staff_id = $2::uuid`,
+    [organizationId, staffId]
+  );
+  return res.rows.map((r) => r.team_id);
+}
+
 export async function addTeamMember(
   organizationId: string,
   teamId: string,
@@ -111,21 +125,60 @@ export async function updateTeamMemberRole(
   return res.rows[0] ?? null;
 }
 
+/**
+ * Удаляет участника из `team_members` и снимает права планера в этой команде:
+ * строка `user_team_memberships` для пользователя с тем же email, что у staff (иначе списки и ACL расходятся).
+ */
 export async function removeTeamMember(
   organizationId: string,
   teamId: string,
   staffId: string
 ): Promise<boolean> {
-  const res = await query(
-    `DELETE FROM team_members
-     WHERE team_id = $2::uuid
-       AND staff_id = $3::uuid
-       AND EXISTS (
-         SELECT 1 FROM teams
-         WHERE teams.id = team_members.team_id
-           AND teams.organization_id = $1
-       )`,
-    [organizationId, teamId, staffId]
-  );
-  return (res.rowCount ?? 0) > 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const delTm = await client.query(
+      qualifyBeerTrackerTables(
+        `DELETE FROM team_members
+         WHERE team_id = $2::uuid
+           AND staff_id = $3::uuid
+           AND EXISTS (
+             SELECT 1 FROM teams
+             WHERE teams.id = team_members.team_id
+               AND teams.organization_id = $1
+           )`
+      ),
+      [organizationId, teamId, staffId]
+    );
+    if ((delTm.rowCount ?? 0) === 0) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+    await client.query(
+      qualifyBeerTrackerTables(
+        `DELETE FROM user_team_memberships utm
+         WHERE utm.team_id = $2::uuid
+           AND EXISTS (
+             SELECT 1
+             FROM staff s
+             INNER JOIN users u
+               ON s.email IS NOT NULL
+              AND LOWER(TRIM(BOTH FROM s.email::text)) = LOWER(TRIM(BOTH FROM u.email::text))
+             INNER JOIN organization_members om
+               ON om.user_id = u.id AND om.organization_id = $1
+             WHERE s.id = $3::uuid
+               AND s.organization_id = $1
+               AND utm.user_id = u.id
+           )`
+      ),
+      [organizationId, teamId, staffId]
+    );
+    await client.query('COMMIT');
+    return true;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }

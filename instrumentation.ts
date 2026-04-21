@@ -3,6 +3,18 @@ export async function register(): Promise<void> {
     return;
   }
 
+  try {
+    const { isOnPremMode } = await import('@/lib/deploymentMode');
+    if (isOnPremMode()) {
+      const { removeDemoSystemOrganizationForOnPrem } = await import(
+        '@/lib/onPrem/removeDemoSystemOrganization'
+      );
+      await removeDemoSystemOrganizationForOnPrem();
+    }
+  } catch (error) {
+    console.warn('[onprem] Удаление демо-организации пропущено:', error);
+  }
+
   // Keep instrumentation independent from demo files in community export.
   if (!process.env.DEMO_MODE_ENABLED) {
     return;

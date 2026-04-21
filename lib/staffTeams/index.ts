@@ -10,6 +10,7 @@ export {
 } from './enrichTeamMembersDisplayNamesFromTracker';
 export {
   addTeamMember,
+  listTeamIdsForStaffInOrganization,
   listTeamMembersWithStaff,
   removeTeamMember,
   updateTeamMemberRole,

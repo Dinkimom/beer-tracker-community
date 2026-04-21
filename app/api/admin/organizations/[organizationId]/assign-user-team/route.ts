@@ -3,12 +3,8 @@ import { z } from 'zod';
 
 import { requireTenantOrgAdmin } from '@/lib/api-tenant';
 import { findOrganizationMembership } from '@/lib/organizations/organizationMembersRepository';
-import {
-  productTeamRoleToFlags,
-  upsertUserTeamMembership,
-  userHasTeamMembershipInOrganization,
-} from '@/lib/organizations/userTeamMembershipRepository';
-import { findTeamById } from '@/lib/staffTeams';
+import { setOrganizationMemberTeam } from '@/lib/organizations/setOrganizationMemberTeam';
+import { userHasTeamMembershipInOrganization } from '@/lib/organizations/userTeamMembershipRepository';
 
 const PostBodySchema = z.object({
   team_id: z.string().uuid(),
@@ -41,7 +37,7 @@ export async function POST(
     return NextResponse.json({ error: 'Укажите user_id, team_id и team_role' }, { status: 400 });
   }
 
-  const { team_id: teamId, team_role, user_id: userId } = parsed.data;
+  const { team_id: teamId, team_role: teamRole, user_id: userId } = parsed.data;
   const orgId = auth.ctx.organizationId;
 
   const membership = await findOrganizationMembership(orgId, userId);
@@ -56,18 +52,17 @@ export async function POST(
     );
   }
 
-  const team = await findTeamById(orgId, teamId);
-  if (!team) {
-    return NextResponse.json({ error: 'Команда не найдена' }, { status: 404 });
-  }
-
-  const flags = productTeamRoleToFlags(team_role);
-  await upsertUserTeamMembership({
-    isTeamLead: flags.isTeamLead,
-    isTeamMember: flags.isTeamMember,
-    teamId,
+  const result = await setOrganizationMemberTeam({
+    organizationId: orgId,
+    preservePlannerTeamRole: false,
+    teamId: teamId,
+    teamRoleOnAssign: teamRole,
     userId,
   });
+
+  if ('error' in result) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
 
   return NextResponse.json({ ok: true });
 }

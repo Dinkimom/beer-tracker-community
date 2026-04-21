@@ -189,14 +189,14 @@ export function AdminTeamMemberRow({
       <div className="flex shrink-0 items-center justify-end">
         <Button
           aria-label={t("admin.teamMemberRow.removeAria", { name: m.staff_display_name })}
-          className="h-9 w-9 shrink-0 p-0 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+          className="h-11 w-11 shrink-0 p-0 text-gray-600 hover:bg-red-50 hover:text-red-700 dark:text-gray-300 dark:hover:bg-red-900/25 dark:hover:text-red-300"
           disabled={busy}
           title={t("admin.teamMemberRow.removeTitle")}
           type="button"
           variant="ghost"
           onClick={() => void onRemove(m.staff_id)}
         >
-          <Icon className="h-5 w-5" name={busy ? "loader" : "x"} />
+          <Icon className="h-6 w-6" name={busy ? "loader" : "x"} />
         </Button>
       </div>
     </li>

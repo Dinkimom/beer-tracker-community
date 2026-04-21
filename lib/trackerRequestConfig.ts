@@ -7,7 +7,9 @@ import type { OrganizationRow } from '@/lib/organizations/types';
 
 import { z } from 'zod';
 
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { getProductUserIdFromRequest } from '@/lib/auth/productSession';
+import { readOnPremSetupState } from '@/lib/onPrem/setupState';
 import { findOrganizationMembership } from '@/lib/organizations/organizationMembersRepository';
 import { findOrganizationById } from '@/lib/organizations/organizationRepository';
 import { TENANT_ORG_HEADER } from '@/lib/tenantHttpConstants';
@@ -77,6 +79,33 @@ async function trackerCloudContextForProductOrganization(
 }
 
 /**
+ * Контекст API трекера по UUID организации продукта без сессии пользователя (только on-prem после инициализации).
+ */
+export async function resolveTrackerCloudContextForProductOrganizationIdOnPrem(
+  organizationProductId: string
+): Promise<{ apiUrl: string; orgId: string }> {
+  const setup = await readOnPremSetupState();
+  if (!setup.hasOrganizations) {
+    throw new TrackerApiConfigError('Завершите первичную настройку.', 403);
+  }
+  const org = await findOrganizationById(organizationProductId);
+  if (!org) {
+    throw new TrackerApiConfigError('Организация не найдена', 404);
+  }
+  const trackerOrgId = org.tracker_org_id?.trim();
+  if (!trackerOrgId) {
+    throw new TrackerApiConfigError(
+      'Для организации не настроен Яндекс Трекер. Откройте админку и подключите трекер.',
+      422
+    );
+  }
+  return {
+    apiUrl: resolveTrackerApiBaseUrlForOrganizationRow(org),
+    orgId: trackerOrgId,
+  };
+}
+
+/**
  * Конфиг для `createTrackerApiClient`: токен из `X-Tracker-Token`, org/url из tenant (БД).
  */
 export async function resolveTrackerApiConfigFromRequest(request: Request): Promise<{
@@ -111,9 +140,10 @@ export async function resolveTrackerApiConfigFromRequest(request: Request): Prom
 }
 
 /**
- * Для POST /api/auth/validate-token: org из заголовка или тела при активной сессии продукта.
+ * Для POST /api/auth/validate-token: org из заголовка или тела.
+ * С сессией продукта — только организации, где есть членство; без сессии — только on-prem после инициализации.
  */
-export function resolveValidateTokenTrackerContext(
+export async function resolveValidateTokenTrackerContext(
   request: Request,
   bodyOrganizationId: unknown
 ): Promise<{ apiUrl: string; orgId: string }> {
@@ -123,14 +153,20 @@ export function resolveValidateTokenTrackerContext(
   const rawOrg = rawHeader || rawBody;
   const parsed = rawOrg ? UuidSchema.safeParse(rawOrg) : null;
 
-  if (!userId) {
-    throw new TrackerApiConfigError('Войдите в аккаунт продукта.', 401);
-  }
   if (!parsed?.success) {
     throw new TrackerApiConfigError(
       'Выберите организацию в приложении или укажите organizationId в теле запроса (UUID).',
       400
     );
   }
-  return trackerCloudContextForProductOrganization(userId, parsed.data);
+
+  if (userId) {
+    return trackerCloudContextForProductOrganization(userId, parsed.data);
+  }
+
+  if (!isOnPremMode()) {
+    throw new TrackerApiConfigError('Войдите в аккаунт продукта.', 401);
+  }
+
+  return resolveTrackerCloudContextForProductOrganizationIdOnPrem(parsed.data);
 }

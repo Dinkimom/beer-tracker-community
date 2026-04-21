@@ -2,22 +2,21 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { requireTenantWithAdminProfile } from '@/lib/api-tenant';
-import { checkInvitationCreateAllowed } from '@/lib/invitations/invitationCreateRateLimit';
 import {
-  createOrganizationInvitation,
-  upsertStaffFromTrackerInvitationContext,
-} from '@/lib/organizations/invitationService';
+  AddTrackerTeamMemberError,
+  addTrackerPersonToTeamWithProductUser,
+} from '@/lib/onPrem/addTrackerPersonToTeamWithProductUser';
+import { CATALOG_TEAMLEAD_SLUG } from '@/lib/organizations/invitedTeamRoleFromCatalogSlug';
 import { listPendingOrganizationInvitations } from '@/lib/organizations/organizationInvitationsRepository';
 
 const PostBodySchema = z.object({
   display_name: z.string().min(1).max(500).optional(),
   email: z.string().email().max(320),
-  expiresInDays: z.number().int().min(1).max(90).optional(),
   invited_team_role: z.enum(['team_lead', 'team_member']).optional(),
-  /** Без team_id — приглашение только в организацию (только org_admin). */
-  team_id: z.string().uuid().optional(),
+  /** Обязательно: добавление только через команду (см. POST …/teams/{teamId}/members). */
+  team_id: z.string().uuid(),
   /** ID пользователя в Яндекс.Трекере (как в селекторе админки). */
-  tracker_user_id: z.string().min(1).max(128).optional(),
+  tracker_user_id: z.string().min(1).max(128),
 });
 
 /**
@@ -61,7 +60,8 @@ export async function GET(
 }
 
 /**
- * POST /api/admin/organizations/[organizationId]/invitations — создать приглашение (письмо по SMTP при настройке env, иначе ссылка в логе).
+ * POST /api/admin/organizations/[organizationId]/invitations — устаревший контракт:
+ * то же прямое добавление в команду, что и POST …/teams/{teamId}/members (без писем и токенов приглашения).
  */
 export async function POST(
   request: Request,
@@ -72,7 +72,7 @@ export async function POST(
   if ('response' in auth) {
     return auth.response;
   }
-  const { profile, ctx } = auth;
+  const { profile } = auth;
 
   const isOrgAdmin = profile.orgRole === 'org_admin';
   const leadTeamIds = new Set(
@@ -80,16 +80,6 @@ export async function POST(
   );
   if (!isOrgAdmin && leadTeamIds.size === 0) {
     return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
-  }
-
-  const rate = checkInvitationCreateAllowed(organizationId, ctx.userId);
-  if (!rate.ok) {
-    const headers =
-      rate.retryAfterSec != null ? { 'Retry-After': String(rate.retryAfterSec) } : undefined;
-    return NextResponse.json(
-      { error: 'Слишком много приглашений за час, попробуйте позже' },
-      { headers, status: 429 }
-    );
   }
 
   let json: unknown;
@@ -103,76 +93,40 @@ export async function POST(
     return NextResponse.json({ error: 'Проверьте email, team_id и роль' }, { status: 400 });
   }
 
-  const { display_name, email, expiresInDays, invited_team_role: roleRaw, team_id, tracker_user_id } =
-    parsed.data;
+  const { display_name, email, invited_team_role: roleRaw, team_id, tracker_user_id } = parsed.data;
+  const emailNorm = email.trim().toLowerCase();
 
-  if (!team_id) {
-    if (!isOrgAdmin) {
-      return NextResponse.json(
-        { error: 'Приглашение без команды может создать только администратор организации' },
-        { status: 403 }
-      );
-    }
-    if (roleRaw === 'team_lead') {
-      return NextResponse.json(
-        { error: 'Роль тимлида задаётся только при приглашении в команду' },
-        { status: 400 }
-      );
-    }
-  } else if (!isOrgAdmin) {
+  if (!isOrgAdmin) {
     if (!leadTeamIds.has(team_id)) {
       return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
     }
     if (roleRaw === 'team_lead') {
       return NextResponse.json(
-        { error: 'Только администратор организации может приглашать тимлида' },
+        { error: 'Только администратор организации может назначать роль тимлида' },
         { status: 403 }
       );
     }
   }
 
-  const invited_team_role = team_id ? (roleRaw ?? 'team_member') : 'team_member';
-
-  const expiresAt =
-    expiresInDays != null
-      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
-      : undefined;
-
-  const emailNorm = email.trim().toLowerCase();
+  const invited_team_role = roleRaw ?? 'team_member';
+  const tid = tracker_user_id.trim();
 
   try {
-    if (tracker_user_id?.trim()) {
-      await upsertStaffFromTrackerInvitationContext({
-        displayName: display_name,
-        emailNorm,
-        organizationId,
-        trackerUserId: tracker_user_id.trim(),
-      });
-    }
-
-    const { invitation } = await createOrganizationInvitation({
-      createdByUserId: ctx.userId,
-      email: emailNorm,
-      expiresAt,
-      invitedTeamRole: invited_team_role,
+    const roleSlugForMember = invited_team_role === 'team_lead' ? CATALOG_TEAMLEAD_SLUG : null;
+    await addTrackerPersonToTeamWithProductUser({
+      displayName: display_name,
+      emailStr: emailNorm,
       organizationId,
-      teamId: team_id ?? null,
+      roleSlug: roleSlugForMember,
+      teamId: team_id,
+      trackerUserId: tid,
     });
-    return NextResponse.json(
-      {
-        invitation: {
-          createdAt: new Date(invitation.created_at).toISOString(),
-          email: invitation.email,
-          expiresAt: new Date(invitation.expires_at).toISOString(),
-          id: invitation.id,
-          invitedTeamRole: invitation.invited_team_role,
-          teamId: invitation.team_id,
-        },
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({ directAdd: true }, { status: 201 });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Не удалось создать приглашение';
+    if (e instanceof AddTrackerTeamMemberError) {
+      return NextResponse.json({ error: e.message }, { status: e.httpStatus });
+    }
+    const msg = e instanceof Error ? e.message : 'Не удалось добавить пользователя';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

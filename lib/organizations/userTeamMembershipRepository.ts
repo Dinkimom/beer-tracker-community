@@ -131,3 +131,21 @@ export async function userHasTeamMembershipInOrganization(
   );
   return res.rows.length > 0;
 }
+
+/** Снимает все строки планера user_team_memberships пользователя в командах этой организации. */
+export async function deleteUserTeamMembershipsForUserInOrganization(
+  organizationId: string,
+  userId: string
+): Promise<void> {
+  await query(
+    `DELETE FROM user_team_memberships utm
+     WHERE utm.user_id = $2::uuid
+       AND EXISTS (
+         SELECT 1
+         FROM teams t
+         WHERE t.id = utm.team_id
+           AND t.organization_id = $1
+       )`,
+    [organizationId, userId]
+  );
+}

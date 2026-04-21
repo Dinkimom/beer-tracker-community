@@ -736,7 +736,8 @@ CREATE UNIQUE INDEX uq_sync_runs_one_running_per_org ON beer_tracker.sync_runs (
 
 COMMENT ON TABLE beer_tracker.sync_runs IS 'Аудит прогонов экспортёра; stats — watermark, cursor, requested_since и т.д.';
 
--- Системная организация для /demo/planner (совпадает с migrations/020_demo_system_organization.sql)
+-- Системная организация для /demo/planner (совпадает с migrations/020_demo_system_organization.sql).
+-- При APP_DEPLOYMENT_MODE=onprem приложение удаляет эту строку при старте Node (см. lib/onPrem/removeDemoSystemOrganization.ts).
 INSERT INTO beer_tracker.organizations (id, name, slug, tracker_org_id, settings)
 VALUES (
     'f0000000-0000-4000-8000-000000000001',
