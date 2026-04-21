@@ -70,14 +70,14 @@ TRACKER_OAUTH_TOKEN=your_oauth_token_here  # Опционально, для fall
 
 Без токена доступ к приложению невозможен.
 
-Подробнее: [USER_TOKEN_GUIDE.md](./docs/USER_TOKEN_GUIDE.md)
+Подробнее о работе токенов в API и клиенте: [API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md).
 
 ## Документация
 
 ### Основные документы
 
 - **[Возможности приложения](./docs/CAPABILITIES.md)** — обзор функций
-- **[Навигация по документации](./docs/README.md)** — индекс документации
+- **[Индекс документации](./docs/DOCUMENTATION_INDEX.md)** — навигация по `docs/`
 - **[API Документация](./docs/API_DOCUMENTATION.md)** — описание API
 - **[Структура проекта](./docs/STRUCTURE.md)** — архитектура приложения
 
@@ -85,13 +85,7 @@ TRACKER_OAUTH_TOKEN=your_oauth_token_here  # Опционально, для fall
 
 - **[Руководство по тестированию](./docs/AGENT_TESTING_GUIDE.md)**
 - **[Квартальное планирование](./docs/QUARTERLY_PLANNING.md)**
-- **[Windmill / историческая схема](./docs/WINDMILL_INTEGRATION.md)** — справочник для миграции данных
 - **[Руководство по иконкам](./docs/ICONS.md)**
-
-### Дополнительные материалы
-
-- **[Известные проблемы](./BUGS_AND_TASKS.md)**
-- **[Планировщик фич](./FEATURE_PLANER.md)**
 
 ## Плановый инкрементальный sync (multi-tenant)
 
@@ -146,4 +140,4 @@ pnpm test
 
 ## Поддержка
 
-При проблемах смотрите [BUGS_AND_TASKS.md](./BUGS_AND_TASKS.md) и каталог [docs/](./docs/).
+Начните с [DOCUMENTATION_INDEX.md](./docs/DOCUMENTATION_INDEX.md) и при необходимости с [API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md).
