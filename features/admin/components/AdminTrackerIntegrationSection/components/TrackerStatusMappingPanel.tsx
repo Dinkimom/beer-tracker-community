@@ -2,7 +2,7 @@
 
 import type { CategoryBucketId } from '../types';
 
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import {
   CustomSelect,
@@ -189,6 +189,23 @@ export function TrackerStatusMappingPanel({
   sections,
 }: TrackerStatusMappingPanelProps) {
   const { t } = useI18n();
+  const [statusSearch, setStatusSearch] = useState('');
+  const searchNeedle = statusSearch.trim().toLowerCase();
+  const filteredSections = useMemo(() => {
+    if (!searchNeedle) {
+      return sections;
+    }
+    return sections
+      .map((section) => ({
+        ...section,
+        rows: section.rows.filter((row) => {
+          const haystack = `${row.display} ${row.key} ${row.statusTypeKey ?? ''}`.toLowerCase();
+          return haystack.includes(searchNeedle);
+        }),
+      }))
+      .filter((section) => section.rows.length > 0);
+  }, [searchNeedle, sections]);
+  const hasRowsForRender = filteredSections.length > 0;
 
   return (
     <div className="space-y-5">
@@ -200,15 +217,30 @@ export function TrackerStatusMappingPanel({
           {t('admin.plannerIntegration.statusMapping.subtitle')}
         </p>
         <div className="mt-3 space-y-3">
-          {isEmpty ? (
+          {!isEmpty ? (
+            <div className="px-0.5">
+              <input
+                className="h-9 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
+                placeholder={t('admin.plannerIntegration.searchField')}
+                type="search"
+                value={statusSearch}
+                onChange={(e) => setStatusSearch(e.target.value)}
+              />
+            </div>
+          ) : null}
+          {isEmpty || !hasRowsForRender ? (
             <div className="rounded-lg border border-dashed border-gray-300 bg-white/60 px-4 py-6 text-center dark:border-gray-600 dark:bg-gray-950/20">
               <p className="text-sm text-gray-700 dark:text-gray-200">
                 {metaLoading
                   ? t('admin.plannerIntegration.statusMapping.loading')
-                  : t('admin.plannerIntegration.statusMapping.empty')}
+                  : !isEmpty && searchNeedle
+                    ? 'Ничего не найдено'
+                    : t('admin.plannerIntegration.statusMapping.empty')}
               </p>
               <p className={`mx-auto mt-1 max-w-md text-xs ${mutedClass}`}>
-                {t('admin.plannerIntegration.statusMapping.hintConnection')}
+                {!isEmpty && searchNeedle
+                  ? 'Измените поисковый запрос'
+                  : t('admin.plannerIntegration.statusMapping.hintConnection')}
               </p>
             </div>
           ) : (
@@ -218,7 +250,7 @@ export function TrackerStatusMappingPanel({
                   className="touch-pan-y max-h-[62vh] overflow-auto text-sm"
                   style={{ overscrollBehaviorY: 'auto' }}
                 >
-                  {sections.map((section, sectionIdx) => (
+                  {filteredSections.map((section, sectionIdx) => (
                     <div
                       key={section.id}
                       className={

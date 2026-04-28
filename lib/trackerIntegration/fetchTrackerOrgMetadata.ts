@@ -139,7 +139,9 @@ export async function fetchTrackerOrganizationStatuses(
   api: AxiosInstance
 ): Promise<TrackerMetadataStatusDto[]> {
   try {
-    const { data } = await api.get<unknown>(`${TRACKER_V3_BASE}/statuses`);
+    const { data } = await api.get<unknown>(`${TRACKER_V3_BASE}/statuses`, {
+      params: { perPage: 1000 },
+    });
     const rows = extractArray(data);
     const out: TrackerMetadataStatusDto[] = [];
     for (const row of rows) {
