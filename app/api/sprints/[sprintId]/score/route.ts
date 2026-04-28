@@ -1,3 +1,5 @@
+import type { Task } from '@/types';
+
 import { NextRequest, NextResponse } from 'next/server';
 
 import {
@@ -10,10 +12,10 @@ import { query } from '@/lib/db';
 import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 import {
-  aggregateSprintScorePoints,
   queryIssueSnapshotsMatchingSprint,
 } from '@/lib/snapshots';
 import { fetchSprintInfo } from '@/lib/trackerApi';
+import { fetchTrackerIssues, mapTrackerIssueToTask } from '@/lib/trackerApi/issues';
 import { loadTrackerIntegrationForOrganization } from '@/lib/trackerIntegration';
 
 export interface SprintScoreRow {
@@ -54,6 +56,46 @@ export interface SprintScoreResponse {
 function n(v: number | null | undefined): number {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
+}
+
+function aggregateSprintScoreFromTasks(tasks: Task[]): {
+  qa_done: number;
+  qa_left: number;
+  sp_done: number;
+  sp_left: number;
+} {
+  let spDone = 0;
+  let spLeft = 0;
+  let tpDone = 0;
+  let tpTotal = 0;
+
+  for (const task of tasks) {
+    const sp = Number.isFinite(task.storyPoints ?? NaN) ? Math.round(task.storyPoints ?? 0) : 0;
+    const tp = Number.isFinite(task.testPoints ?? NaN) ? Math.round(task.testPoints ?? 0) : 0;
+    const originalStatus = (task.originalStatus ?? '').trim().toLowerCase();
+    const tpClosed = originalStatus === 'closed' || originalStatus === 'rc';
+
+    // TP: считаем по всем задачам спринта; "сожжено" в статусах closed и rc.
+    tpTotal += tp;
+    if (tpClosed) {
+      tpDone += tp;
+    }
+
+    // SP: считаем как раньше через категорию done, но без rc.
+    const done = task.status === 'done' && originalStatus !== 'rc';
+    if (done) {
+      spDone += sp;
+    } else {
+      spLeft += sp;
+    }
+  }
+
+  return {
+    qa_done: tpDone,
+    qa_left: Math.max(0, tpTotal - tpDone),
+    sp_done: spDone,
+    sp_left: spLeft,
+  };
 }
 
 async function queryIssueSnapshotsMatchingSprintSafe(
@@ -141,9 +183,10 @@ export async function GET(
     }
 
     const trackerApi = await getTrackerApiFromRequest(request);
-    const [sprintInfo, integration] = await Promise.all([
+    const [sprintInfo, integration, trackerIssues] = await Promise.all([
       fetchSprintInfo(sprintIdNum, trackerApi),
       loadTrackerIntegrationForOrganization(organizationId),
+      fetchTrackerIssues(sprintIdNum, trackerApi),
     ]);
     const testingFlowMode =
       integration?.testingFlow?.mode === 'standalone_qa_tasks'
@@ -171,8 +214,10 @@ export async function GET(
       }),
     ]);
 
+    const scoreIssues = trackerIssues.length > 0 ? trackerIssues : snapshotIssues;
+    const snapshotTasks = scoreIssues.map((issue) => mapTrackerIssueToTask(issue, integration));
     const { qa_done: qaDone, qa_left: qaLeft, sp_done: spDone, sp_left: spLeft } =
-      aggregateSprintScorePoints(snapshotIssues);
+      aggregateSprintScoreFromTasks(snapshotTasks);
 
     const sname = sprintInfo.name ?? '';
     const pgGoals = pgResult.rows as PgGoalsAggRow[];

@@ -173,8 +173,8 @@ export async function fetchTeamMembersByBoardIdForOrg(
           role_pick.slug AS role_slug,
           COALESCE(re.uuid::text, re.id::text) AS staff_id,
           COALESCE(
+            NULLIF(TRIM(CONCAT_WS(' ', re.name, re.surname)), ''),
             NULLIF(TRIM(re.fullname), ''),
-            NULLIF(TRIM(CONCAT_WS(' ', re.surname, re.name, re.patronymic)), ''),
             COALESCE(re.uuid::text, re.id::text)
           ) AS staff_display_name,
           re.email AS staff_email,
@@ -262,8 +262,8 @@ export async function fetchAllTeamMembersForOrg(
           role_pick.slug AS role_slug,
           COALESCE(re.uuid::text, re.id::text) AS staff_id,
           COALESCE(
+            NULLIF(TRIM(CONCAT_WS(' ', re.name, re.surname)), ''),
             NULLIF(TRIM(re.fullname), ''),
-            NULLIF(TRIM(CONCAT_WS(' ', re.surname, re.name, re.patronymic)), ''),
             COALESCE(re.uuid::text, re.id::text)
           ) AS staff_display_name,
           re.email AS staff_email,

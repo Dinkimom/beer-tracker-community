@@ -1,6 +1,7 @@
 import type { TrackerIssue } from '@/types/tracker';
 
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { changelogEntriesFromRawIssueLogs } from '@/lib/ytrackerRawIssues';
 
 interface OverseerRawIssueRow {
@@ -8,7 +9,6 @@ interface OverseerRawIssueRow {
   issue_data: unknown;
   issue_id: string;
   issue_logs: unknown;
-  team_uid: string | null;
   updated_at: Date | string | null;
 }
 
@@ -58,7 +58,7 @@ function normalizeOverseerRows(rows: OverseerRawIssueRow[]): TrackerIssue[] {
 
 export async function findOverseerIssueByKey(issueKey: string): Promise<TrackerIssue | null> {
   const res = await query<OverseerRawIssueRow>(
-    `SELECT issue_id, issue_data, issue_logs, issue_comments, updated_at, team_uid
+    `SELECT issue_id, issue_data, issue_logs, issue_comments, updated_at
      FROM overseer.ytracker_raw_issues
      WHERE issue_data->>'key' = $1
      LIMIT 1`,
@@ -68,16 +68,25 @@ export async function findOverseerIssueByKey(issueKey: string): Promise<TrackerI
   return row ? normalizeOverseerRows([row])[0] ?? null : null;
 }
 
-export async function findOverseerIssuesByKeys(issueKeys: string[]): Promise<TrackerIssue[]> {
+export async function findOverseerIssuesByKeys(
+  issueKeys: string[],
+  organizationId?: string
+): Promise<TrackerIssue[]> {
   const unique = [...new Set(issueKeys.map((k) => k.trim()).filter(Boolean))];
   if (unique.length === 0) {
     return [];
   }
+  const onPrem = isOnPremMode();
   const res = await query<OverseerRawIssueRow>(
-    `SELECT issue_id, issue_data, issue_logs, issue_comments, updated_at, team_uid
-     FROM overseer.ytracker_raw_issues
-     WHERE issue_data->>'key' = ANY($1::text[])`,
-    [unique]
+    onPrem
+      ? `SELECT issue_id, issue_data, issue_logs, issue_comments, updated_at
+         FROM overseer.ytracker_raw_issues
+         WHERE issue_data->>'key' = ANY($1::text[])`
+      : `SELECT issue_id, issue_data, issue_logs, issue_comments, updated_at
+         FROM overseer.ytracker_raw_issues
+         WHERE organization_id = $1::uuid
+           AND issue_data->>'key' = ANY($2::text[])`,
+    onPrem ? [unique] : [organizationId ?? null, unique]
   );
   return normalizeOverseerRows(res.rows);
 }
@@ -110,17 +119,18 @@ export async function queryOverseerIssuesByBoard(boardId: number): Promise<Track
 
 export async function queryAllOverseerIssues(): Promise<TrackerIssue[]> {
   const res = await query<OverseerRawIssueRow>(
-    `SELECT issue_id, issue_data, issue_logs, issue_comments, updated_at, team_uid
+    `SELECT issue_id, issue_data, issue_logs, issue_comments, updated_at
      FROM overseer.ytracker_raw_issues`
   );
   return normalizeOverseerRows(res.rows);
 }
 
 export async function fetchIssueChangelogMapFromOverseer(
+  organizationId: string,
   issueKeys: string[]
 ): Promise<Map<string, { changelog: unknown[]; comments: unknown[] }>> {
   const map = new Map<string, { changelog: unknown[]; comments: unknown[] }>();
-  const issues = await findOverseerIssuesByKeys(issueKeys);
+  const issues = await findOverseerIssuesByKeys(issueKeys, organizationId);
   for (const issue of issues) {
     const payload = issue as unknown as Record<string, unknown>;
     const rawLogs = payload.issue_logs ?? payload.changelog ?? [];

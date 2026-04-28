@@ -2,10 +2,10 @@
  * Утилиты для вычисления метрик спринта
  */
 
-import { TASK_GROUP_KEY_UNASSIGNED } from '@/features/task/constants/taskGroupKeys';
 import type { Developer, Task } from '@/types';
 import type { TaskStatus } from '@/utils/statusMapper';
 
+import { TASK_GROUP_KEY_UNASSIGNED } from '@/features/task/constants/taskGroupKeys';
 import { getTaskStoryPoints, getTaskTestPoints, isOriginalTask } from '@/lib/pointsUtils';
 import { mapStatus } from '@/utils/statusMapper';
 
@@ -16,7 +16,15 @@ function getTaskStatus(task: Task): TaskStatus {
 }
 
 function isDone(task: Task): boolean {
+  if ((task.originalStatus ?? '').trim().toLowerCase() === 'rc') {
+    return false;
+  }
   return getTaskStatus(task) === 'done';
+}
+
+function isTpClosedStatus(task: Task): boolean {
+  const status = (task.originalStatus ?? '').trim().toLowerCase();
+  return status === 'closed' || status === 'rc';
 }
 
 /** Экспорт для использования в свимлейнах и др. */
@@ -137,7 +145,9 @@ function buildMetricsByAssigneeRowForPerson(
   );
   const tpTasks = [...devAsQa, ...qaForPerson];
   const totalTP = tpTasks.reduce((s, t) => s + getTaskTestPoints(t), 0);
-  const completedTP = tpTasks.filter(isDone).reduce((s, t) => s + getTaskTestPoints(t), 0);
+  const completedTP = tpTasks
+    .filter(isTpClosedStatus)
+    .reduce((s, t) => s + getTaskTestPoints(t), 0);
   const percentTP = totalTP > 0 ? Math.round((completedTP / totalTP) * 100) : 0;
 
   if (totalSP === 0 && totalTP === 0) return null;
@@ -244,6 +254,8 @@ export function computeBurndownTilesFromTasks(
     totalScopeTP += tp;
     if (isDone(t)) {
       completedSP += sp;
+    }
+    if (isTpClosedStatus(t)) {
       completedTP += tp;
     }
   }

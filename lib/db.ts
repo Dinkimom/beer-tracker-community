@@ -5,7 +5,7 @@
 
 import type { QueryParams } from '@/types';
 
-import { type QueryResult, type QueryResultRow, Pool } from 'pg';
+import { Client, type QueryResult, type QueryResultRow, Pool } from 'pg';
 
 import { getBeerTrackerSchema, getPostgresConfig } from './env';
 
@@ -25,6 +25,17 @@ function createPool() {
   } as never);
 }
 
+function createClient() {
+  return new Client({
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    password: config.password,
+    statement_timeout: 10_000,
+  } as never);
+}
+
 // В режиме разработки Next.js HMR переоценивает модули при каждом hot-reload,
 // создавая новые экземпляры Pool без закрытия старых → исчерпание max_connections.
 // Глобальный синглтон решает эту проблему.
@@ -35,6 +46,12 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 pool.on('error', (err) => {
+  const message = err instanceof Error ? err.message.toLowerCase() : '';
+  const isPreparedStatementMissing =
+    message.includes('prepared statement') && message.includes('does not exist');
+  if (isPreparedStatementMissing) {
+    return;
+  }
   console.error('Unexpected error on idle client', err);
 });
 
@@ -82,21 +99,45 @@ export function qualifyBeerTrackerTables(sql: string): string {
 
 export { pool };
 
+async function queryViaFreshClientSimple<T extends QueryResultRow = any>( // eslint-disable-line @typescript-eslint/no-explicit-any -- same generic policy as query()
+  sql: string,
+  params?: QueryParams
+): Promise<QueryResult<T>> {
+  const client = createClient();
+  try {
+    await client.connect();
+    return await client.query<T>({
+      text: sql,
+      ...(params ? { values: params } : {}),
+      query_mode: 'simple',
+    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any -- runtime option absent in typings
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
 /** T — тип строки результата; по умолчанию any, чтобы существующие маршруты не ломали вывод типов. */
 export async function query<T extends QueryResultRow = any>( // eslint-disable-line @typescript-eslint/no-explicit-any -- см. комментарий выше
   text: string,
   params?: QueryParams
 ): Promise<QueryResult<T>> {
   const sql = qualifyBeerTrackerTables(text);
-  try {
-    return await pool.query<T>(sql, params);
-  } catch (error) {
-    const message = error instanceof Error ? error.message.toLowerCase() : '';
-    // pgbouncer/transaction-pooling can occasionally drop prepared statements on server side.
-    // Retry once: pg driver will recreate statement metadata on the new roundtrip.
-    if (message.includes('prepared statement') && message.includes('does not exist')) {
+  const maxPreparedStatementRetries = 3;
+  for (let attempt = 1; attempt <= maxPreparedStatementRetries; attempt += 1) {
+    try {
       return await pool.query<T>(sql, params);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : '';
+      const isPreparedStatementMissing =
+        message.includes('prepared statement') && message.includes('does not exist');
+      if (isPreparedStatementMissing && attempt < maxPreparedStatementRetries) {
+        continue;
+      }
+      if (isPreparedStatementMissing) {
+        return await queryViaFreshClientSimple<T>(sql, params);
+      }
+      throw error;
     }
-    throw error;
   }
+  throw new Error('query: unreachable retry loop');
 }

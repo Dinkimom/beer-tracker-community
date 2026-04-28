@@ -13,24 +13,6 @@ interface SprintScoreBlockProps {
   sprintId: number;
 }
 
-function scoreMarkSuffix(mark: number, language: AppLanguage, t: (key: string) => string): string {
-  if (language === 'en') {
-    return mark === 1
-      ? t('sidebar.sprintScoreBlock.scoreMarkSuffix1')
-      : t('sidebar.sprintScoreBlock.scoreMarkSuffix2');
-  }
-  const n = mark;
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) {
-    return t('sidebar.sprintScoreBlock.scoreMarkSuffix1');
-  }
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
-    return t('sidebar.sprintScoreBlock.scoreMarkSuffix2');
-  }
-  return t('sidebar.sprintScoreBlock.scoreMarkSuffix3');
-}
-
 function ScoreMetricBar({
   label,
   value,
@@ -80,14 +62,14 @@ function scoreBadgeToneClass(mark: number): string {
   return 'text-red-600 dark:text-red-400';
 }
 
-function ScoreBadge({ mark, language, t }: { language: AppLanguage; mark: number; t: (key: string) => string }) {
+function ScoreBadge({ mark, language }: { language: AppLanguage; mark: number }) {
   const text = scoreBadgeToneClass(mark);
-  const suffix = scoreMarkSuffix(mark, language, t);
+  const label = language === 'en' ? `${mark} of 6 points` : `${mark} из 6 баллов`;
 
   return (
     <div className="">
       <span className={`text-sm font-bold tabular-nums ${text}`}>
-        {mark} {suffix}
+        {label}
       </span>
     </div>
   );
@@ -161,7 +143,7 @@ export function SprintScoreBlock({ sprintId }: SprintScoreBlockProps) {
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
           {t('sidebar.sprintScoreBlock.heading')}
         </h2>
-        {rows[0] && <ScoreBadge language={language} mark={rows[0].mark} t={t} />}
+        {rows[0] && <ScoreBadge language={language} mark={rows[0].mark} />}
       </div>
 
       {isLoading && (
