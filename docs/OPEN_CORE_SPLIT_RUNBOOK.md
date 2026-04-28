@@ -18,10 +18,9 @@
 
 - Public repo создан и доступен токену с правом push.
 - В public есть целевая ветка (`main` или `master`, согласно `PUBLIC_CORE_TARGET_BRANCH`).
-- В private настроены секреты/переменные CI:
-  - `PUBLIC_CORE_REPO` (`owner/repo`)
-  - `PUBLIC_CORE_PUSH_TOKEN` (PAT с write на contents)
-  - `OPEN_CORE_PUBLISH=true` (repo variable, только когда готовы публиковать)
+- В private настроены CI (Actions):
+  - **Secrets:** `PUBLIC_CORE_REPO` (`owner/repo`), `PUBLIC_CORE_PUSH_TOKEN` (PAT с write на contents)
+  - **Repository variable:** `OPEN_CORE_PUBLISH` = `true` — включает verify/publish; убрать или не `true` — джобы не бегают. Её нельзя заменить секретом с тем же именем: в GitHub Actions контекст **`secrets` недоступен в условиях `if` у job**, поэтому гейт в `.github/workflows/publish-community-core.yml` смотрит только на **`vars.OPEN_CORE_PUBLISH`**.
 
 ## Локальный прогон перед релизом
 

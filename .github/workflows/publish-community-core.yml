@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+# OPEN_CORE_PUBLISH задайте как repository Variable (не Secret): в job-level `if`
+# контекст `secrets` в GitHub Actions недоступен — иначе workflow не валидируется.
+# См. https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
 jobs:
   verify-community-export:
     if: ${{ github.ref == 'refs/heads/master' && vars.OPEN_CORE_PUBLISH == 'true' }}

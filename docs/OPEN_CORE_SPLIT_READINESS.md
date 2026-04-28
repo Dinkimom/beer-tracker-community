@@ -45,7 +45,7 @@
    - `pnpm test`
 2. Проверить готовность публикации:
    - `PUBLIC_CORE_REPO`, `PUBLIC_CORE_PUSH_TOKEN`, `PUBLIC_CORE_TARGET_BRANCH`
-   - `OPEN_CORE_PUBLISH=true` только на период публикации
+   - repository variable `OPEN_CORE_PUBLISH` = `true` только на период публикации (не Secret — см. runbook)
 3. Выполнить publish и smoke-check public репозитория:
    - `pnpm install --frozen-lockfile`
    - `pnpm typecheck`

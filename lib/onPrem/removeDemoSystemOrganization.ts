@@ -4,7 +4,7 @@ import { getBeerTrackerSchema } from '@/lib/env';
 import {
   DEMO_SYSTEM_ORGANIZATION_ID,
   DEMO_SYSTEM_ORGANIZATION_SLUG,
-} from '@/lib/demo/demoSystemOrganization';
+} from '@/lib/onPrem/demoSystemOrganizationConstants';
 
 /**
  * Удаляет системную демо-организацию из БД (сид init.sql / миграция 020), если приложение в режиме on-prem.
