@@ -48,6 +48,12 @@ export function useAdminTeamDetailPage({
     { label: "", value: "" },
   ]);
   const [addCandidatesLoading, setAddCandidatesLoading] = useState(false);
+  const [onPremMode, setOnPremMode] = useState(false);
+  const [addTrackerUserId, setAddTrackerUserId] = useState("");
+  const [addTrackerUserMeta, setAddTrackerUserMeta] = useState<{
+    displayName?: string;
+    email?: string | null;
+  } | null>(null);
   const [addRoleSlug, setAddRoleSlug] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [memberBusyId, setMemberBusyId] = useState<string | null>(null);
@@ -69,6 +75,26 @@ export function useAdminTeamDetailPage({
       return [{ label: t("admin.teamDetail.noRole"), value: "" }, ...rest];
     });
   }, [language, t]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSetupState() {
+      try {
+        const res = await fetch("/api/onprem/setup-state", { credentials: "include" });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { onPremMode?: boolean };
+        if (!cancelled) {
+          setOnPremMode(Boolean(data.onPremMode));
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    void loadSetupState();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadCatalog = useCallback(async () => {
     if (!orgId) return;
@@ -130,6 +156,10 @@ export function useAdminTeamDetailPage({
 
   const loadAddCandidates = useCallback(async () => {
     if (!orgId || !initialTeam.id) return;
+    if (onPremMode) {
+      setAddCandidateOptions([{ label: t("admin.teamDetail.selectUser"), value: "" }]);
+      return;
+    }
     setAddCandidatesLoading(true);
     try {
       const res = await fetch(
@@ -151,7 +181,7 @@ export function useAdminTeamDetailPage({
     } finally {
       setAddCandidatesLoading(false);
     }
-  }, [initialTeam.id, orgId, t]);
+  }, [initialTeam.id, onPremMode, orgId, t]);
 
   useEffect(() => {
     void loadAddCandidates();
@@ -250,6 +280,53 @@ export function useAdminTeamDetailPage({
   );
 
   const addMember = useCallback(async () => {
+    if (onPremMode) {
+      const trackerUserId = addTrackerUserId.trim();
+      const email = addTrackerUserMeta?.email?.trim();
+      if (!trackerUserId || !email) {
+        return;
+      }
+      setAddLoading(true);
+      try {
+        const res = await fetch(
+          `/api/admin/organizations/${orgId}/teams/${initialTeam.id}/members`,
+          {
+            body: JSON.stringify({
+              display_name: addTrackerUserMeta?.displayName?.trim() || undefined,
+              email,
+              role_slug: addRoleSlug.trim() || null,
+              tracker_user_id: trackerUserId,
+            }),
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          },
+        );
+        const json = (await res.json()) as { error?: string };
+        if (!res.ok) {
+          toast.error(json.error ?? t("admin.teamDetail.genericError"));
+          return;
+        }
+        toast.success(t("admin.teamDetail.userAddedToTeam"));
+        setAddTrackerUserId("");
+        setAddTrackerUserMeta(null);
+        setAddRoleSlug("");
+        const refreshRes = await fetch(
+          `/api/admin/organizations/${orgId}/teams/${initialTeam.id}/members`,
+          { credentials: "include" },
+        );
+        if (refreshRes.ok) {
+          const data = (await refreshRes.json()) as { members: AdminTeamMember[] };
+          setMembers(data.members);
+        }
+      } catch {
+        toast.error(t("admin.common.networkError"));
+      } finally {
+        setAddLoading(false);
+      }
+      return;
+    }
+
     if (!addProductUserId) return;
     setAddLoading(true);
     try {
@@ -287,7 +364,17 @@ export function useAdminTeamDetailPage({
     } finally {
       setAddLoading(false);
     }
-  }, [addProductUserId, addRoleSlug, initialTeam.id, loadAddCandidates, orgId, t]);
+  }, [
+    addProductUserId,
+    addRoleSlug,
+    addTrackerUserId,
+    addTrackerUserMeta,
+    initialTeam.id,
+    loadAddCandidates,
+    onPremMode,
+    orgId,
+    t,
+  ]);
 
   const updateProductTeamRole = useCallback(
     async (productUserId: string, teamRole: "team_lead" | "team_member") => {
@@ -449,7 +536,9 @@ export function useAdminTeamDetailPage({
 
   const backHref = "/admin/teams";
 
-  const addCanAddMember = Boolean(addProductUserId.trim());
+  const addCanAddMember = onPremMode
+    ? Boolean(addTrackerUserId.trim() && addTrackerUserMeta?.email?.trim())
+    : Boolean(addProductUserId.trim());
 
   return {
     addCanAddMember,
@@ -458,6 +547,8 @@ export function useAdminTeamDetailPage({
     addLoading,
     addMember,
     addProductUserId,
+    addTrackerUserId,
+    addTrackerUserMeta,
     addRoleOptions,
     addRoleSlug,
     backHref,
@@ -473,12 +564,15 @@ export function useAdminTeamDetailPage({
     memberBusyId,
     productRoleBusyUserId,
     members,
+    onPremMode,
     orgId,
     queueOptions,
     removeMember,
     roleOptions,
     saveTeam,
     setAddProductUserId,
+    setAddTrackerUserId,
+    setAddTrackerUserMeta,
     setAddRoleSlug,
     setEditBoard,
     setEditQueue,

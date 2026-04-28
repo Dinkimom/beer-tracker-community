@@ -111,7 +111,7 @@ export async function POST(request: Request) {
     try {
       await client.query('BEGIN');
       // Сериализуем первичный онбординг, чтобы параллельные запросы не создали вторую организацию.
-      await client.query('SELECT pg_advisory_xact_lock(742_001)');
+      await client.query('SELECT pg_advisory_xact_lock(742001)');
       const stateResult = await client.query<{
         has_organizations: boolean;
         has_users: boolean;

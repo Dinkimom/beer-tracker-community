@@ -1019,6 +1019,9 @@ export const enMessages = {
       addFromOrgTitle: 'Add from organization users',
       addFromOrgHint:
         'Only people already in the system without a team yet. The catalog role is set both in Tracker and for the planner.',
+      addFromTrackerTitle: 'Add from Yandex Tracker',
+      addFromTrackerHint:
+        'In on-prem, use tracker people search. After selection, the user is added to the team and gets system access.',
       noUsersHintPrefix: 'There are no such users right now — add people in',
       noUsersLink: 'Users',
       userTitle: 'User',
