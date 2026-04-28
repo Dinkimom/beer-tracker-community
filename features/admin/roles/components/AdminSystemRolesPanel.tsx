@@ -1,5 +1,6 @@
 import type { RoleCatalogEntry } from "@/lib/roles/catalog";
 
+import { useI18n } from "@/contexts/LanguageContext";
 import {
   adminListGroupUl,
   badgeMuted,
@@ -9,18 +10,19 @@ import {
   hCard,
   muted,
 } from "@/features/admin/adminUiTokens";
-import { useI18n } from "@/contexts/LanguageContext";
 
 import { formatPlatforms } from "../rolesPageConstants";
 
 export interface AdminSystemRolesPanelProps {
   hidden: boolean;
   systemRoles: RoleCatalogEntry[];
+  titleKey?: string;
 }
 
 export function AdminSystemRolesPanel({
   hidden,
   systemRoles,
+  titleKey = "admin.rolesPage.systemTitle",
 }: AdminSystemRolesPanelProps) {
   const { has, t } = useI18n();
 
@@ -35,7 +37,7 @@ export function AdminSystemRolesPanel({
       <section className={cardShell}>
         <div className={cardHeader}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <h2 className={hCard}>{t("admin.rolesPage.systemTitle")}</h2>
+            <h2 className={hCard}>{t(titleKey)}</h2>
             {systemRoles.length > 0 ? (
               <span className={`${badgeMuted} shrink-0 self-start sm:self-auto`}>
                 {t("admin.rolesPage.systemReadonlyBadge")}

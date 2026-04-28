@@ -4,6 +4,7 @@ import { TRACKER_UPSTREAM_FORWARD_STATUSES, handleApiError } from '@/lib/api-err
 import { requireTenantContext } from '@/lib/api-tenant';
 import { getTrackerApiFromRequest } from '@/lib/api-tracker';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 import { resolvePlannerAssigneeIdsForTrackerSync } from '@/lib/staffTeams/resolvePlannerAssigneeForTrackerSync';
 import { updateIssueAssignee } from '@/lib/trackerApi';
@@ -25,6 +26,7 @@ export async function POST(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -59,11 +61,11 @@ export async function POST(
       // Удаляем существующие позиции для задач, которые обновляются
       const taskIds = positions.map((p) => p.taskId);
       if (taskIds.length > 0) {
-        const placeholders = taskIds.map((_, i) => `$${i + 3}`).join(', ');
+        const placeholders = taskIds.map((_, i) => `$${i + (onPrem ? 2 : 3)}`).join(', ');
         await query(
           `DELETE FROM task_positions 
-           WHERE organization_id = $1 AND sprint_id = $2 AND task_id IN (${placeholders})`,
-          [organizationId, sprintId, ...taskIds]
+           WHERE ${onPrem ? `sprint_id = $1 AND task_id IN (${placeholders})` : `organization_id = $1 AND sprint_id = $2 AND task_id IN (${placeholders})`}`,
+          onPrem ? [sprintId, ...taskIds] : [organizationId, sprintId, ...taskIds]
         );
       }
 
@@ -73,41 +75,74 @@ export async function POST(
       const params: Array<boolean | number | string | null> = [];
 
       positions.forEach((pos, index) => {
-        const baseIndex = index * 11 + 1;
+        const baseIndex = index * (onPrem ? 10 : 11) + 1;
         valuesParts.push(
-          `($${baseIndex}, $${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10})`
+          onPrem
+            ? `($${baseIndex}, $${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9})`
+            : `($${baseIndex}, $${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10})`
         );
-        params.push(
-          organizationId,
-          sprintId,
-          pos.taskId,
-          pos.assigneeId,
-          pos.startDay,
-          pos.startPart,
-          pos.duration,
-          pos.plannedStartDay ?? null,
-          pos.plannedStartPart ?? null,
-          pos.plannedDuration ?? null,
-          pos.isQa ?? false
-        );
+        if (onPrem) {
+          params.push(
+            sprintId,
+            pos.taskId,
+            pos.assigneeId,
+            pos.startDay,
+            pos.startPart,
+            pos.duration,
+            pos.plannedStartDay ?? null,
+            pos.plannedStartPart ?? null,
+            pos.plannedDuration ?? null,
+            pos.isQa ?? false
+          );
+        } else {
+          params.push(
+            organizationId,
+            sprintId,
+            pos.taskId,
+            pos.assigneeId,
+            pos.startDay,
+            pos.startPart,
+            pos.duration,
+            pos.plannedStartDay ?? null,
+            pos.plannedStartPart ?? null,
+            pos.plannedDuration ?? null,
+            pos.isQa ?? false
+          );
+        }
       });
 
       await query(
-        `INSERT INTO task_positions (
-          organization_id, sprint_id, task_id, assignee_id, start_day, start_part, duration,
-          planned_start_day, planned_start_part, planned_duration, is_qa
-        ) VALUES ${valuesParts.join(', ')}
-        ON CONFLICT (organization_id, sprint_id, task_id)
-        DO UPDATE SET
-          assignee_id = EXCLUDED.assignee_id,
-          start_day = EXCLUDED.start_day,
-          start_part = EXCLUDED.start_part,
-          duration = EXCLUDED.duration,
-          planned_start_day = EXCLUDED.planned_start_day,
-          planned_start_part = EXCLUDED.planned_start_part,
-          planned_duration = EXCLUDED.planned_duration,
-          is_qa = EXCLUDED.is_qa,
-          updated_at = CURRENT_TIMESTAMP`,
+        onPrem
+          ? `INSERT INTO task_positions (
+               sprint_id, task_id, assignee_id, start_day, start_part, duration,
+               planned_start_day, planned_start_part, planned_duration, is_qa
+             ) VALUES ${valuesParts.join(', ')}
+             ON CONFLICT (sprint_id, task_id)
+             DO UPDATE SET
+               assignee_id = EXCLUDED.assignee_id,
+               start_day = EXCLUDED.start_day,
+               start_part = EXCLUDED.start_part,
+               duration = EXCLUDED.duration,
+               planned_start_day = EXCLUDED.planned_start_day,
+               planned_start_part = EXCLUDED.planned_start_part,
+               planned_duration = EXCLUDED.planned_duration,
+               is_qa = EXCLUDED.is_qa,
+               updated_at = CURRENT_TIMESTAMP`
+          : `INSERT INTO task_positions (
+               organization_id, sprint_id, task_id, assignee_id, start_day, start_part, duration,
+               planned_start_day, planned_start_part, planned_duration, is_qa
+             ) VALUES ${valuesParts.join(', ')}
+             ON CONFLICT (organization_id, sprint_id, task_id)
+             DO UPDATE SET
+               assignee_id = EXCLUDED.assignee_id,
+               start_day = EXCLUDED.start_day,
+               start_part = EXCLUDED.start_part,
+               duration = EXCLUDED.duration,
+               planned_start_day = EXCLUDED.planned_start_day,
+               planned_start_part = EXCLUDED.planned_start_part,
+               planned_duration = EXCLUDED.planned_duration,
+               is_qa = EXCLUDED.is_qa,
+               updated_at = CURRENT_TIMESTAMP`,
         params
       );
 
@@ -116,21 +151,33 @@ export async function POST(
         // Если его нет — не трогаем существующие task_position_segments по этой задаче.
         if (pos.segments !== undefined) {
           await query(
-            'DELETE FROM task_position_segments WHERE organization_id = $1 AND sprint_id = $2 AND task_id = $3',
-            [organizationId, sprintId, pos.taskId]
+            onPrem
+              ? 'DELETE FROM task_position_segments WHERE sprint_id = $1 AND task_id = $2'
+              : 'DELETE FROM task_position_segments WHERE organization_id = $1 AND sprint_id = $2 AND task_id = $3',
+            onPrem ? [sprintId, pos.taskId] : [organizationId, sprintId, pos.taskId]
           );
           if (pos.segments.length > 0) {
             for (let i = 0; i < pos.segments.length; i++) {
               const seg = pos.segments[i]!;
               await query(
-                `INSERT INTO task_position_segments (organization_id, sprint_id, task_id, segment_index, start_day, start_part, duration)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT (organization_id, sprint_id, task_id, segment_index)
-                 DO UPDATE SET
-                   start_day = EXCLUDED.start_day,
-                   start_part = EXCLUDED.start_part,
-                   duration = EXCLUDED.duration`,
-                [organizationId, sprintId, pos.taskId, i, seg.startDay, seg.startPart, seg.duration]
+                onPrem
+                  ? `INSERT INTO task_position_segments (sprint_id, task_id, segment_index, start_day, start_part, duration)
+                     VALUES ($1, $2, $3, $4, $5, $6)
+                     ON CONFLICT (sprint_id, task_id, segment_index)
+                     DO UPDATE SET
+                       start_day = EXCLUDED.start_day,
+                       start_part = EXCLUDED.start_part,
+                       duration = EXCLUDED.duration`
+                  : `INSERT INTO task_position_segments (organization_id, sprint_id, task_id, segment_index, start_day, start_part, duration)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                     ON CONFLICT (organization_id, sprint_id, task_id, segment_index)
+                     DO UPDATE SET
+                       start_day = EXCLUDED.start_day,
+                       start_part = EXCLUDED.start_part,
+                       duration = EXCLUDED.duration`,
+                onPrem
+                  ? [sprintId, pos.taskId, i, seg.startDay, seg.startPart, seg.duration]
+                  : [organizationId, sprintId, pos.taskId, i, seg.startDay, seg.startPart, seg.duration]
               );
             }
           }

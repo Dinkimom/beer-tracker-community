@@ -19,7 +19,6 @@ import {
 } from '@/lib/organizations/organizationInvitationsRepository';
 import {
   findOrganizationMembership,
-  listUserOrganizations,
 } from '@/lib/organizations/organizationMembersRepository';
 import { findOrganizationById } from '@/lib/organizations/organizationRepository';
 import { findTeamById } from '@/lib/staffTeams';
@@ -38,11 +37,8 @@ function appBaseUrl(): string {
   return u && u.length > 0 ? u.replace(/\/$/, '') : 'http://localhost:3000';
 }
 
-function inviteRoleToFlags(role: InvitedTeamRole): { isTeamLead: boolean; isTeamMember: boolean } {
-  if (role === 'team_lead') {
-    return { isTeamLead: true, isTeamMember: false };
-  }
-  return { isTeamLead: false, isTeamMember: true };
+function invitedRoleToCatalogSlug(role: InvitedTeamRole): string | null {
+  return role === 'team_lead' ? 'teamlead' : null;
 }
 
 function displayNameFromInvitationEmail(emailNorm: string): string {
@@ -145,7 +141,7 @@ async function resolveOrCreateStaffIdForInvitationEmailInTx(
 }
 
 /**
- * Ростер команды в админке строится по team_members + staff; приглашение до этого писало только user_team_memberships.
+ * Ростер команды в админке строится по team_members + staff.
  */
 async function ensureStaffAndTeamMemberForInviteInTx(
   client: PoolClient,
@@ -277,22 +273,6 @@ async function upsertMembershipInTx(
   role: InvitedTeamRole,
   invitationEmailNorm: string
 ): Promise<void> {
-  const membership = await client.query(
-    qualifyBeerTrackerTables(
-      `SELECT id FROM organization_members WHERE organization_id = $1 AND user_id = $2`
-    ),
-    [organizationId, userId]
-  );
-  if (membership.rows.length === 0) {
-    await client.query(
-      qualifyBeerTrackerTables(
-        `INSERT INTO organization_members (organization_id, user_id, role)
-         VALUES ($1, $2, 'member')`
-      ),
-      [organizationId, userId]
-    );
-  }
-
   if (!teamId) {
     await resolveOrCreateStaffIdForInvitationEmailInTx(
       client,
@@ -302,19 +282,26 @@ async function upsertMembershipInTx(
     return;
   }
 
-  const { isTeamLead, isTeamMember } = inviteRoleToFlags(role);
+  if (!userId) {
+    return;
+  }
+  await ensureStaffAndTeamMemberForInviteInTx(client, organizationId, teamId, invitationEmailNorm);
   await client.query(
     qualifyBeerTrackerTables(
-      `INSERT INTO user_team_memberships (user_id, team_id, is_team_lead, is_team_member)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id, team_id) DO UPDATE SET
-         is_team_lead = user_team_memberships.is_team_lead OR EXCLUDED.is_team_lead,
-         is_team_member = user_team_memberships.is_team_member OR EXCLUDED.is_team_member`
+      `UPDATE team_members tm
+       SET role_slug = COALESCE($3, tm.role_slug)
+       WHERE tm.team_id = $1::uuid
+         AND tm.staff_id = (
+           SELECT s.id
+           FROM staff s
+           WHERE s.organization_id = $2
+             AND s.email IS NOT NULL
+             AND LOWER(TRIM(s.email)) = LOWER(TRIM($4))
+           LIMIT 1
+         )`
     ),
-    [userId, teamId, isTeamLead, isTeamMember]
+    [teamId, organizationId, invitedRoleToCatalogSlug(role), invitationEmailNorm]
   );
-
-  await ensureStaffAndTeamMemberForInviteInTx(client, organizationId, teamId, invitationEmailNorm);
 }
 
 export async function acceptOrganizationInvitation(
@@ -374,15 +361,6 @@ export async function acceptOrganizationInvitation(
         };
       }
       userId = existing.id;
-      const orgs = await listUserOrganizations(userId);
-      if (orgs.some((o) => o.organization_id !== inv.organization_id)) {
-        await client.query('ROLLBACK');
-        return {
-          message: 'У вас уже есть другая организация. Принять приглашение нельзя.',
-          ok: false,
-          status: 409,
-        };
-      }
     } else {
       const hash = hashPassword(trimmed);
       const ins = await client.query<{ id: string }>(

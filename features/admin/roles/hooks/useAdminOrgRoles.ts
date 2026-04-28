@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 
 import { useI18n } from "@/contexts/LanguageContext";
 
-import { RolesTabId, sortOrgRoles } from "../rolesPageConstants";
+import { sortOrgRoles } from "../rolesPageConstants";
 
 export interface UseAdminOrgRolesParams {
   organizationId: string;
@@ -15,9 +15,8 @@ export interface UseAdminOrgRolesParams {
 
 export function useAdminOrgRoles({ organizationId, roles }: UseAdminOrgRolesParams) {
   const { language, t } = useI18n();
-  const systemRoles = useMemo(() => roles.filter((r) => r.isSystem), [roles]);
   const orgFromProps = useMemo(
-    () => roles.filter((r) => !r.isSystem).sort((a, b) => sortOrgRoles(a, b, language)),
+    () => roles.slice().sort((a, b) => sortOrgRoles(a, b, language)),
     [language, roles],
   );
 
@@ -41,8 +40,6 @@ export function useAdminOrgRoles({ organizationId, roles }: UseAdminOrgRolesPara
 
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-
-  const [activeRolesTab, setActiveRolesTab] = useState<RolesTabId>("organization");
 
   const apiBase = `/api/admin/organizations/${organizationId}/org-roles`;
 
@@ -240,7 +237,6 @@ export function useAdminOrgRoles({ organizationId, roles }: UseAdminOrgRolesPara
   }, []);
 
   return {
-    activeRolesTab,
     beginEdit,
     cancelDelete,
     cancelEdit,
@@ -258,7 +254,6 @@ export function useAdminOrgRoles({ organizationId, roles }: UseAdminOrgRolesPara
     newSlug,
     newTitle,
     orgRoles,
-    setActiveRolesTab,
     setEditTitle,
     setNewSlug,
     setNewTitle,
@@ -267,7 +262,6 @@ export function useAdminOrgRoles({ organizationId, roles }: UseAdminOrgRolesPara
     startDelete,
     submitCreate,
     submitEdit,
-    systemRoles,
     toggleEditPlatform,
     toggleNewPlatform,
     setEditDomainRoleSafe,

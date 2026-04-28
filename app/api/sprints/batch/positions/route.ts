@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 
 /**
  * GET /api/sprints/batch/positions?sprintIds=1,2,3
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { searchParams } = new URL(request.url);
     const sprintIdsStr = searchParams.get('sprintIds');
@@ -45,9 +47,9 @@ export async function GET(request: NextRequest) {
         planned_duration,
         is_qa
       FROM task_positions 
-      WHERE organization_id = $1 AND sprint_id = ANY($2::int[])
+      WHERE ${onPrem ? 'sprint_id = ANY($1::int[])' : 'organization_id = $1 AND sprint_id = ANY($2::int[])'}
       ORDER BY sprint_id, assignee_id, start_day, start_part`,
-      [organizationId, sprintIds]
+      onPrem ? [sprintIds] : [organizationId, sprintIds]
     );
 
     const bySprint: Record<number, Array<Record<string, unknown>>> = {};
@@ -64,9 +66,9 @@ export async function GET(request: NextRequest) {
       const segmentsResult = await query(
         `SELECT sprint_id, task_id, segment_index, start_day, start_part, duration
          FROM task_position_segments
-         WHERE organization_id = $1 AND sprint_id = ANY($2::int[])
+         WHERE ${onPrem ? 'sprint_id = ANY($1::int[])' : 'organization_id = $1 AND sprint_id = ANY($2::int[])'}
          ORDER BY sprint_id, task_id, segment_index`,
-        [organizationId, sprintIds]
+        onPrem ? [sprintIds] : [organizationId, sprintIds]
       );
       const segmentsBySprintAndTask = new Map<string, Array<{ start_day: number; start_part: number; duration: number }>>();
       for (const row of segmentsResult.rows as Array<{ sprint_id: number; task_id: string; segment_index: number; start_day: number; start_part: number; duration: number }>) {

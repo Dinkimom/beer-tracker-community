@@ -4,6 +4,17 @@ export async function register(): Promise<void> {
   }
 
   try {
+    const { runDbContractPreflightOnStartup } = await import('@/lib/dbContractPreflight');
+    await runDbContractPreflightOnStartup();
+  } catch (error) {
+    const { isDbContractPreflightStrict } = await import('@/lib/env');
+    if (isDbContractPreflightStrict()) {
+      throw error;
+    }
+    console.warn('[db-contract] preflight skipped or failed:', error);
+  }
+
+  try {
     const { isOnPremMode } = await import('@/lib/deploymentMode');
     if (isOnPremMode()) {
       const { removeDemoSystemOrganizationForOnPrem } = await import(

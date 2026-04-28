@@ -12,7 +12,6 @@ export interface OrganizationRow {
   settings: Record<string, unknown>;
   slug: string | null;
   sync_next_run_at: Date | null;
-  tracker_api_base_url: string;
   tracker_org_id: string;
   updated_at: Date;
 }

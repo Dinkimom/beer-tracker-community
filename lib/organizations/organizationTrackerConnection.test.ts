@@ -38,6 +38,7 @@ vi.mock('@/lib/crypto-org-secrets', () => ({
 
 vi.mock('@/lib/env', () => ({
   getOrgSecretsMasterKey: vi.fn(() => Buffer.alloc(32, 1)),
+  getTrackerConfig: vi.fn(() => ({ apiUrl: 'https://api.tracker.yandex.net/v3' })),
 }));
 
 vi.mock('@/lib/sync/queue', () => ({
@@ -65,7 +66,6 @@ function minimalOrg() {
     settings: {},
     slug: 'test',
     sync_next_run_at: null,
-    tracker_api_base_url: '',
     tracker_org_id: '',
     updated_at: new Date(),
   };
@@ -157,7 +157,6 @@ describe('connectOrganizationTracker', () => {
   it('returns unchanged without DB or Tracker when org/url match and token not re-sent', async () => {
     vi.mocked(findOrganizationById).mockResolvedValue({
       ...minimalOrg(),
-      tracker_api_base_url: 'https://api.tracker.yandex.net/v3',
       tracker_org_id: 'cloud-1',
     });
 
@@ -179,7 +178,6 @@ describe('connectOrganizationTracker', () => {
     vi.mocked(getDecryptedOrganizationTrackerToken).mockResolvedValue('stored-oauth-token');
     vi.mocked(findOrganizationById).mockResolvedValue({
       ...minimalOrg(),
-      tracker_api_base_url: '',
       tracker_org_id: 'old-cloud',
     });
     mockClientQuery
@@ -233,7 +231,6 @@ describe('verifyStoredOrganizationTrackerToken', () => {
   beforeEach(() => {
     vi.mocked(findOrganizationById).mockResolvedValue({
       ...minimalOrg(),
-      tracker_api_base_url: 'https://api.tracker.yandex.net/v3',
       tracker_org_id: 'cloud-verify',
     });
     vi.mocked(getDecryptedOrganizationTrackerToken).mockResolvedValue('decrypted-token');

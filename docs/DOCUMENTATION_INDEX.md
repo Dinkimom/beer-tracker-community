@@ -23,7 +23,6 @@ beer-tracker/
 ├── FEATURE_PLANER.md                  # Концепция планировщика фич
 ├── QUARTERLY_PLANNING_SUMMARY.md      # Сводка по квартальному планированию
 ├── BUGS_AND_TASKS.md                  # Известные проблемы и задачи
-├── MIGRATION_GUIDE.md                 # Руководство по миграциям БД
 ├── REFACTORING_SUMMARY.md             # Сводка по реструктуризации
 └── SIDEBAR_MIGRATION.md               # Миграция сайдбара
 ```
@@ -56,6 +55,7 @@ beer-tracker/
 | [CAPABILITIES.md](./CAPABILITIES.md) | Полный обзор возможностей | Все |
 | [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) | API, архитектура запросов | Разработчики |
 | [API_BACKENDS.md](./API_BACKENDS.md) | Маршруты `/api` → Tracker, PostgreSQL | Разработчики |
+| [COMMERCIAL_DB_CONTRACT.md](./COMMERCIAL_DB_CONTRACT.md) | Контракт орг-БД для коммерческого подключения (`beer_tracker` + `overseer/public`) | Разработчики, DevOps |
 | [STRUCTURE.md](./STRUCTURE.md) | Feature-based архитектура | Разработчики |
 | [ADR-001-quarterly-planning-v1-v2.md](./ADR-001-quarterly-planning-v1-v2.md) | Квартальное планирование: v1 legacy vs v2 канон | Разработчики |
 | [FOLDER_NAMING.md](./FOLDER_NAMING.md) | Именование папок (kebab vs PascalCase для доменов) | Разработчики |
@@ -78,7 +78,6 @@ beer-tracker/
 | [FEATURE_PLANER.md](../FEATURE_PLANER.md) | Концепция планировщика фич | Разработчики |
 | [QUARTERLY_PLANNING_SUMMARY.md](../QUARTERLY_PLANNING_SUMMARY.md) | Сводка по квартальному планированию | Разработчики |
 | [BUGS_AND_TASKS.md](../BUGS_AND_TASKS.md) | Известные проблемы | Все |
-| [MIGRATION_GUIDE.md](../MIGRATION_GUIDE.md) | Миграции БД | Разработчики |
 | [REFACTORING_SUMMARY.md](../REFACTORING_SUMMARY.md) | Реструктуризация проекта | Разработчики |
 | [REFACTORING_BACKLOG.md](./REFACTORING_BACKLOG.md) | Что уже отрефакторено и бэклог на будущее | Разработчики |
 | [OPEN_CORE_SPLIT_READINESS.md](./OPEN_CORE_SPLIT_READINESS.md) | Готовность к разделению private/public | Разработчики, DevOps |
@@ -102,7 +101,7 @@ beer-tracker/
 - **Архитектура** → [STRUCTURE.md](./STRUCTURE.md)
 - **Именование папок (домены)** → [FOLDER_NAMING.md](./FOLDER_NAMING.md)
 
-- **База данных** → [API_DOCUMENTATION.md](./API_DOCUMENTATION.md#распределение-эндпоинтов-по-источникам-данных), [MIGRATION_GUIDE.md](../MIGRATION_GUIDE.md)
+- **База данных** → [API_DOCUMENTATION.md](./API_DOCUMENTATION.md#распределение-эндпоинтов-по-источникам-данных), [COMMERCIAL_DB_CONTRACT.md](./COMMERCIAL_DB_CONTRACT.md)
 - **Иконки** → [ICONS.md](./ICONS.md)
 - **Z-index и слои** → [ZINDEX.md](./ZINDEX.md)
 - **Тестирование** → [AGENT_TESTING_GUIDE.md](./AGENT_TESTING_GUIDE.md)

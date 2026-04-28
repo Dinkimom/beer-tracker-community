@@ -74,6 +74,7 @@ export async function POST(request: Request) {
     buildDefaultTrackerIntegrationStored(0)
   );
   const org = await insertOrganization({ name, slug, settings });
+  // В новой модели админ-роль хранится в users.
   await insertOrganizationMember(org.id, auth.userId, 'org_admin');
   return NextResponse.json(
     {

@@ -1,7 +1,7 @@
 import type { RoleCatalogEntry } from "@/lib/roles/catalog";
 
-import { adminListGroupUl, muted } from "@/features/admin/adminUiTokens";
 import { useI18n } from "@/contexts/LanguageContext";
+import { adminListGroupUl, muted } from "@/features/admin/adminUiTokens";
 
 import {
   OrganizationRoleTableRow,
@@ -25,10 +25,10 @@ export function OrganizationRolesTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-[60vh] overflow-auto">
       <table className="min-w-full w-full text-sm">
         <caption className="sr-only">{t("admin.rolesPage.orgTableCaption")}</caption>
-        <thead>
+        <thead className="sticky top-0 z-10 bg-white dark:bg-gray-800">
           <tr className="border-b border-gray-200 dark:border-gray-700">
             <th
               className="pb-2 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400"

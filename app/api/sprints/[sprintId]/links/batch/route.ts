@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 import { BatchLinksSchema, formatValidationError, validateRequest } from '@/lib/validation';
 
@@ -19,6 +20,7 @@ export async function POST(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -53,11 +55,11 @@ export async function POST(
       // Удаляем существующие связи для обновляемых связей
       const linkIds = links.map((l) => l.id);
       if (linkIds.length > 0) {
-        const placeholders = linkIds.map((_, i) => `$${i + 3}`).join(', ');
+        const placeholders = linkIds.map((_, i) => `$${i + (onPrem ? 2 : 3)}`).join(', ');
         await query(
           `DELETE FROM task_links 
-           WHERE organization_id = $1 AND sprint_id = $2 AND id IN (${placeholders})`,
-          [organizationId, sprintId, ...linkIds]
+           WHERE ${onPrem ? `sprint_id = $1 AND id IN (${placeholders})` : `organization_id = $1 AND sprint_id = $2 AND id IN (${placeholders})`}`,
+          onPrem ? [sprintId, ...linkIds] : [organizationId, sprintId, ...linkIds]
         );
       }
 
@@ -67,29 +69,50 @@ export async function POST(
       const params: Array<number | string | null> = [];
 
       links.forEach((link, index) => {
-        const baseIndex = index * 7 + 1;
+        const baseIndex = index * (onPrem ? 6 : 7) + 1;
         valuesParts.push(
-          `($${baseIndex}, $${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`
+          onPrem
+            ? `($${baseIndex}, $${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5})`
+            : `($${baseIndex}, $${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`
         );
-        params.push(
-          link.id,
-          organizationId,
-          sprintId,
-          link.fromTaskId,
-          link.toTaskId,
-          link.fromAnchor ?? null,
-          link.toAnchor ?? null
-        );
+        if (onPrem) {
+          params.push(
+            link.id,
+            sprintId,
+            link.fromTaskId,
+            link.toTaskId,
+            link.fromAnchor ?? null,
+            link.toAnchor ?? null
+          );
+        } else {
+          params.push(
+            link.id,
+            organizationId,
+            sprintId,
+            link.fromTaskId,
+            link.toTaskId,
+            link.fromAnchor ?? null,
+            link.toAnchor ?? null
+          );
+        }
       });
 
       await query(
-        `INSERT INTO task_links (
-          id, organization_id, sprint_id, from_task_id, to_task_id, from_anchor, to_anchor
-        ) VALUES ${valuesParts.join(', ')}
-        ON CONFLICT (organization_id, sprint_id, from_task_id, to_task_id)
-        DO UPDATE SET
-          from_anchor = EXCLUDED.from_anchor,
-          to_anchor = EXCLUDED.to_anchor`,
+        onPrem
+          ? `INSERT INTO task_links (
+               id, sprint_id, from_task_id, to_task_id, from_anchor, to_anchor
+             ) VALUES ${valuesParts.join(', ')}
+             ON CONFLICT (sprint_id, from_task_id, to_task_id)
+             DO UPDATE SET
+               from_anchor = EXCLUDED.from_anchor,
+               to_anchor = EXCLUDED.to_anchor`
+          : `INSERT INTO task_links (
+               id, organization_id, sprint_id, from_task_id, to_task_id, from_anchor, to_anchor
+             ) VALUES ${valuesParts.join(', ')}
+             ON CONFLICT (organization_id, sprint_id, from_task_id, to_task_id)
+             DO UPDATE SET
+               from_anchor = EXCLUDED.from_anchor,
+               to_anchor = EXCLUDED.to_anchor`,
         params
       );
 

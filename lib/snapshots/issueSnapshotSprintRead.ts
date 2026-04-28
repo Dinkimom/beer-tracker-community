@@ -5,7 +5,10 @@
 import type { QueryParams } from '@/types';
 import type { TrackerIssue } from '@/types/tracker';
 
+import { issueDataSprintContains } from '@/lib/burndown/sprintMembership';
 import { query } from '@/lib/db';
+import { isDbCompatibilityMode } from '@/lib/env';
+import { queryAllOverseerIssues } from '@/lib/snapshots/overseerRawIssuesRead';
 
 export interface SprintSnapshotQueryParams {
   /** Точное совпадение `payload.functionalTeam` (как колонка team в CH при фильтре по доске). */
@@ -96,5 +99,18 @@ export async function queryIssueSnapshotsMatchingSprint(
     args
   );
 
-  return res.rows.map((r) => r.payload);
+  const rows = res.rows.map((r) => r.payload);
+  if (rows.length > 0 || !isDbCompatibilityMode()) {
+    return rows;
+  }
+  const fallback = await queryAllOverseerIssues();
+  return fallback.filter((issue) => {
+    if (!issueDataSprintContains(issue, name, sid ?? undefined)) {
+      return false;
+    }
+    if (!team) {
+      return true;
+    }
+    return (issue.functionalTeam ?? '').trim() === team;
+  });
 }

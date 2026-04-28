@@ -42,7 +42,7 @@ pnpm dev
 
 ### Без Docker (свой Postgres)
 
-Задайте `POSTGRES_*` в `.env` и убедитесь, что выполнен `database/init.sql` на чистой БД (или эквивалентные миграции).
+Задайте `POSTGRES_*` в `.env` и убедитесь, что выполнен `database/init.sql` на чистой БД.
 
 ```bash
 pnpm dev

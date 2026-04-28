@@ -1,6 +1,5 @@
 'use client';
 
-import type { AdminTeamRow } from '@/features/admin/adminTeamCatalog';
 import type { UserOrganizationSummary } from '@/lib/organizations';
 import type { ReactNode } from 'react';
 
@@ -29,9 +28,9 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/admin/org', icon: 'home', labelKey: 'admin.shell.nav.organization' },
+  { href: '/admin/teams', icon: 'users', labelKey: 'admin.shell.nav.teams' },
   { href: '/admin/members', icon: 'user', labelKey: 'admin.shell.nav.members' },
   { href: '/admin/tracker', icon: 'link', labelKey: 'admin.shell.nav.tracker' },
-  { href: '/admin/teams', icon: 'users', labelKey: 'admin.shell.nav.teams', requiresTracker: true },
   { href: '/admin/roles', icon: 'hash', labelKey: 'admin.shell.nav.roles' },
   { href: '/admin/sync', icon: 'refresh', labelKey: 'admin.shell.nav.sync', requiresTracker: true },
 ];
@@ -39,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
 interface AdminShellProps {
   children: ReactNode;
   email: string;
+  exporterEnabled: boolean;
   isSuperAdmin: boolean;
   orgs: UserOrganizationSummary[];
 }
@@ -48,7 +48,7 @@ function displayOrgMemberRole(role: string, has: (key: string) => boolean, t: (k
   return has(key) ? t(key) : role;
 }
 
-export function AdminShell({ children, email, isSuperAdmin, orgs }: AdminShellProps) {
+export function AdminShell({ children, email, exporterEnabled, isSuperAdmin, orgs }: AdminShellProps) {
   const { has, t } = useI18n();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
@@ -65,8 +65,6 @@ export function AdminShell({ children, email, isSuperAdmin, orgs }: AdminShellPr
   const { loading: trackerGateLoading, ready: trackerConnectionReady } =
     useAdminTrackerConnectionReady(canAdmin && connectOrgId ? connectOrgId : '');
 
-  const [sidebarTeams, setSidebarTeams] = useState<AdminTeamRow[]>([]);
-
   useEffect(() => {
     if (!connectOrgId) return;
     try {
@@ -75,39 +73,6 @@ export function AdminShell({ children, email, isSuperAdmin, orgs }: AdminShellPr
       /* ignore */
     }
   }, [connectOrgId]);
-
-  useEffect(() => {
-    if (!connectOrgId || trackerGateLoading || !trackerConnectionReady || !activeOrg?.canAccessAdmin) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- сброс при закрытом гейте Трекера или смене org
-      setSidebarTeams([]);
-      return;
-    }
-
-    const ac = new AbortController();
-
-    async function loadSidebarTeamsForNav(): Promise<void> {
-      try {
-        const res = await fetch(`/api/admin/organizations/${connectOrgId}/teams`, {
-          credentials: 'include',
-          signal: ac.signal,
-        });
-        const data = (await res.json()) as { error?: string; teams?: AdminTeamRow[] };
-        if (!res.ok) {
-          setSidebarTeams([]);
-          return;
-        }
-        const list = Array.isArray(data.teams) ? [...data.teams] : [];
-        list.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
-        setSidebarTeams(list);
-      } catch (e: unknown) {
-        if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') return;
-        setSidebarTeams([]);
-      }
-    }
-
-    void loadSidebarTeamsForNav();
-    return () => ac.abort();
-  }, [activeOrg?.canAccessAdmin, connectOrgId, trackerConnectionReady, trackerGateLoading]);
 
   function makeNavHref(href: string) {
     return href;
@@ -125,6 +90,7 @@ export function AdminShell({ children, email, isSuperAdmin, orgs }: AdminShellPr
     <nav aria-label={t('admin.shell.navAriaLabel')} className="flex-1 overflow-y-auto p-3">
       <ul className="space-y-1">
         {NAV_ITEMS.map((item) => {
+          if (!exporterEnabled && item.href === '/admin/sync') return null;
           if (!activeOrg?.canAccessAdmin) return null;
           const teamLeadAllowed = item.href === '/admin/teams';
           if (!isOrgAdminForActive && !teamLeadAllowed) return null;
@@ -208,36 +174,6 @@ export function AdminShell({ children, email, isSuperAdmin, orgs }: AdminShellPr
                   </span>
                 ) : null}
               </Link>
-              {item.href === '/admin/teams' && sidebarTeams.length > 0 ? (
-                <ul
-                  aria-label={t('admin.shell.teamsQuickNavAria')}
-                  className="ml-5 mt-1 space-y-0.5 border-l border-ds-border-subtle py-0.5 pl-3"
-                >
-                  {sidebarTeams.map((team) => {
-                    const teamPath = `/admin/teams/${team.id}`;
-                    const subActive = pathname === teamPath || pathname.startsWith(`${teamPath}/`);
-                    return (
-                      <li key={team.id}>
-                        <Link
-                          aria-current={subActive ? 'page' : undefined}
-                          className={[
-                            'flex w-full cursor-pointer rounded-md py-1.5 pl-2 pr-2 text-left text-xs transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-                            subActive
-                              ? 'bg-blue-100 font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-100'
-                              : 'font-normal text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/[0.04]',
-                            team.active ? '' : 'opacity-70',
-                          ].join(' ')}
-                          href={makeNavHref(teamPath)}
-                          title={team.active ? undefined : t('admin.shell.teamInactiveTitle')}
-                          onClick={() => setDrawerOpen(false)}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{team.title}</span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
             </li>
           );
         })}

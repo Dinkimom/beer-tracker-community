@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 
 /** PATCH: обновить цель (text и/или checked) */
@@ -15,6 +16,7 @@ export async function PATCH(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { id } = await resolveParams(context.params);
     if (!id) {
@@ -45,9 +47,9 @@ export async function PATCH(
     const result = await query(
       `UPDATE sprint_goals
        SET ${updates.join(', ')}
-       WHERE organization_id = $${paramIndex} AND id = $${paramIndex + 1}
+       WHERE ${onPrem ? `id = $${paramIndex}` : `organization_id = $${paramIndex} AND id = $${paramIndex + 1}`}
        RETURNING id, text, done`,
-      values
+      onPrem ? [...values.slice(0, -2), id] : values
     );
 
     if (result.rows.length === 0) {
@@ -84,6 +86,7 @@ export async function DELETE(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { id } = await resolveParams(context.params);
     if (!id) {
@@ -91,8 +94,10 @@ export async function DELETE(
     }
 
     const result = await query(
-      'DELETE FROM sprint_goals WHERE organization_id = $1 AND id = $2 RETURNING id',
-      [organizationId, id]
+      onPrem
+        ? 'DELETE FROM sprint_goals WHERE id = $1 RETURNING id'
+        : 'DELETE FROM sprint_goals WHERE organization_id = $1 AND id = $2 RETURNING id',
+      onPrem ? [id] : [organizationId, id]
     );
 
     if (result.rows.length === 0) {

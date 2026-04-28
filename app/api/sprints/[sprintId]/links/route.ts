@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 import {
   TaskLinkSchema,
@@ -19,6 +20,7 @@ export async function GET(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -39,9 +41,9 @@ export async function GET(
         to_anchor,
         created_at
       FROM task_links 
-      WHERE organization_id = $1 AND sprint_id = $2
+      WHERE ${onPrem ? 'sprint_id = $1' : 'organization_id = $1 AND sprint_id = $2'}
       ORDER BY created_at`,
-      [organizationId, sprintId]
+      onPrem ? [sprintId] : [organizationId, sprintId]
     );
 
     return NextResponse.json({ links: result.rows });
@@ -64,6 +66,7 @@ export async function POST(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -95,14 +98,24 @@ export async function POST(
     const linkId = id || `link-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     const result = await query(
-      `INSERT INTO task_links (id, organization_id, sprint_id, from_task_id, to_task_id, from_anchor, to_anchor)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (organization_id, sprint_id, from_task_id, to_task_id)
-      DO UPDATE SET
-        from_anchor = EXCLUDED.from_anchor,
-        to_anchor = EXCLUDED.to_anchor
-      RETURNING *`,
-      [linkId, organizationId, sprintId, fromTaskId, toTaskId, fromAnchor || null, toAnchor || null]
+      onPrem
+        ? `INSERT INTO task_links (id, sprint_id, from_task_id, to_task_id, from_anchor, to_anchor)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (sprint_id, from_task_id, to_task_id)
+           DO UPDATE SET
+             from_anchor = EXCLUDED.from_anchor,
+             to_anchor = EXCLUDED.to_anchor
+           RETURNING *`
+        : `INSERT INTO task_links (id, organization_id, sprint_id, from_task_id, to_task_id, from_anchor, to_anchor)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (organization_id, sprint_id, from_task_id, to_task_id)
+           DO UPDATE SET
+             from_anchor = EXCLUDED.from_anchor,
+             to_anchor = EXCLUDED.to_anchor
+           RETURNING *`,
+      onPrem
+        ? [linkId, sprintId, fromTaskId, toTaskId, fromAnchor || null, toAnchor || null]
+        : [linkId, organizationId, sprintId, fromTaskId, toTaskId, fromAnchor || null, toAnchor || null]
     );
 
     return NextResponse.json({ link: result.rows[0] });
@@ -125,6 +138,7 @@ export async function DELETE(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -139,8 +153,10 @@ export async function DELETE(
     }
 
     await query(
-      'DELETE FROM task_links WHERE organization_id = $1 AND sprint_id = $2 AND id = $3',
-      [organizationId, sprintId, linkId]
+      onPrem
+        ? 'DELETE FROM task_links WHERE sprint_id = $1 AND id = $2'
+        : 'DELETE FROM task_links WHERE organization_id = $1 AND sprint_id = $2 AND id = $3',
+      onPrem ? [sprintId, linkId] : [organizationId, sprintId, linkId]
     );
 
     return NextResponse.json({ success: true });

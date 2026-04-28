@@ -1,11 +1,10 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
-import { AdminOrganizationUsersClient } from '@/features/admin/members/AdminOrganizationUsersClient';
+import { AdminRegistryEmployeesClient } from '@/features/admin/members/AdminRegistryEmployeesClient';
 import { getCachedAdminOrganizationContext } from '@/lib/access/adminOrganizationContext';
 import { getVerifiedProductUserIdFromServerCookies } from '@/lib/auth';
-import { listOrganizationMemberDirectory, parseMemberDirectoryTeamsJson } from '@/lib/organizations';
-import { listTeams } from '@/lib/staffTeams';
+import { listRegistryEmployeesDirectory } from '@/lib/organizations/organizationMembersRepository';
 
 export default async function MembersPage() {
   const userId = await getVerifiedProductUserIdFromServerCookies();
@@ -21,38 +20,11 @@ export default async function MembersPage() {
 
   const connectOrgId = adminOrg.organization_id;
 
-  const [directoryRows, rawTeams] = await Promise.all([
-    listOrganizationMemberDirectory(connectOrgId),
-    listTeams(connectOrgId, { activeOnly: false }),
-  ]);
-
-  const initialMembers = directoryRows.map((r) => ({
-    addedAt: new Date(r.created_at).toISOString(),
-    email: r.email,
-    hasTeamMembership: r.has_team_membership,
-    orgRole: r.org_role,
-    teams: parseMemberDirectoryTeamsJson(r.teams_json).map((t) => ({
-      isTeamLead: Boolean(t.is_team_lead),
-      isTeamMember: Boolean(t.is_team_member),
-      teamId: t.team_id,
-      title: t.title,
-    })),
-    userId: r.user_id,
-  }));
-  const initialTeams = rawTeams.map((t) => ({
-    active: t.active,
-    id: t.id,
-    title: t.title,
-  }));
+  const rows = await listRegistryEmployeesDirectory(connectOrgId);
 
   return (
     <Suspense>
-      <AdminOrganizationUsersClient
-        currentUserId={userId}
-        initialMembers={initialMembers}
-        initialTeams={initialTeams}
-        orgId={connectOrgId}
-      />
+      <AdminRegistryEmployeesClient rows={rows} />
     </Suspense>
   );
 }

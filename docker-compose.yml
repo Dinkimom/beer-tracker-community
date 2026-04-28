@@ -39,25 +39,26 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_EXPORTER_ENABLED: ${NEXT_PUBLIC_EXPORTER_ENABLED:-true}
       TRACKER_API_URL: ${TRACKER_API_URL:-https://api.tracker.yandex.net/v3}
+      EXPORTER_ENABLED: ${EXPORTER_ENABLED:-true}
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:?Set AUTH_SESSION_SECRET in .env (≥32 characters)}
       ORG_SECRETS_ENCRYPTION_KEY: ${ORG_SECRETS_ENCRYPTION_KEY:?Set ORG_SECRETS_ENCRYPTION_KEY in .env}
       BEER_TRACKER_SCHEMA: ${BEER_TRACKER_SCHEMA:-beer_tracker}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-beer_tracker}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-}
       SYNC_CRON_SECRET: ${SYNC_CRON_SECRET:-}
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     restart: unless-stopped
 
   sync-worker:
+    profiles: ["exporter"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -65,15 +66,16 @@ services:
     environment:
       NODE_ENV: production
       TRACKER_API_URL: ${TRACKER_API_URL:-https://api.tracker.yandex.net/v3}
+      EXPORTER_ENABLED: ${EXPORTER_ENABLED:-true}
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:?Set AUTH_SESSION_SECRET in .env (≥32 characters)}
       ORG_SECRETS_ENCRYPTION_KEY: ${ORG_SECRETS_ENCRYPTION_KEY:?Set ORG_SECRETS_ENCRYPTION_KEY in .env}
       BEER_TRACKER_SCHEMA: ${BEER_TRACKER_SCHEMA:-beer_tracker}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-beer_tracker}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       db:
         condition: service_healthy
@@ -83,7 +85,7 @@ services:
 
   # Профиль cron — не стартует при обычном `docker compose up` (избегаем 401 при пустом SYNC_CRON_SECRET).
   sync-cron:
-    profiles: ["cron"]
+    profiles: ["cron", "exporter"]
     image: curlimages/curl:8.12.1
     environment:
       SYNC_CRON_SECRET: ${SYNC_CRON_SECRET:-}
@@ -108,6 +110,7 @@ services:
     restart: unless-stopped
 
   redis:
+    profiles: ["exporter"]
     image: redis:7-alpine
     ports:
       - "6379:6379"

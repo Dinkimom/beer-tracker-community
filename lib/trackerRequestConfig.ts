@@ -1,17 +1,20 @@
 /**
  * Резолв Cloud Organization ID и URL API трекера для запроса планера:
- * только при сессии продукта + {@link TENANT_ORG_HEADER} — из `organizations.tracker_org_id` / `tracker_api_base_url`.
+ * только при сессии продукта + {@link TENANT_ORG_HEADER} — из `organizations.tracker_org_id` и env `TRACKER_API_URL`.
  */
 
 import type { OrganizationRow } from '@/lib/organizations/types';
 
 import { z } from 'zod';
 
-import { isOnPremMode } from '@/lib/deploymentMode';
 import { getProductUserIdFromRequest } from '@/lib/auth/productSession';
+import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
+import { getTrackerConfig } from '@/lib/env';
 import { readOnPremSetupState } from '@/lib/onPrem/setupState';
 import { findOrganizationMembership } from '@/lib/organizations/organizationMembersRepository';
 import { findOrganizationById } from '@/lib/organizations/organizationRepository';
+import { getDecryptedOrganizationTrackerToken } from '@/lib/organizations/organizationSecretsRepository';
 import { TENANT_ORG_HEADER } from '@/lib/tenantHttpConstants';
 import { normalizeTrackerApiBaseUrl } from '@/lib/trackerCredentialsValidation';
 
@@ -33,16 +36,8 @@ export class TrackerApiConfigError extends Error {
   }
 }
 
-export function resolveTrackerApiBaseUrlForOrganizationRow(org: OrganizationRow): string {
-  const fromOrg = org.tracker_api_base_url?.trim();
-  if (fromOrg) {
-    try {
-      return normalizeTrackerApiBaseUrl(fromOrg);
-    } catch {
-      /* fall through */
-    }
-  }
-  const envUrl = process.env.TRACKER_API_URL?.trim();
+export function resolveTrackerApiBaseUrlForOrganizationRow(_org: OrganizationRow): string {
+  const envUrl = getTrackerConfig().apiUrl?.trim();
   if (envUrl) {
     try {
       return normalizeTrackerApiBaseUrl(envUrl);
@@ -105,6 +100,21 @@ export async function resolveTrackerCloudContextForProductOrganizationIdOnPrem(
   };
 }
 
+async function resolveDefaultOnPremOrganizationId(): Promise<string> {
+  const setup = await readOnPremSetupState();
+  if (!setup.hasOrganizations) {
+    throw new TrackerApiConfigError('Завершите первичную настройку.', 403);
+  }
+  const res = await query<{ id: string }>(
+    `SELECT id FROM organizations ORDER BY created_at ASC LIMIT 1`
+  );
+  const organizationId = res.rows[0]?.id?.trim();
+  if (!organizationId) {
+    throw new TrackerApiConfigError('Организация не найдена', 404);
+  }
+  return organizationId;
+}
+
 /**
  * Конфиг для `createTrackerApiClient`: токен из `X-Tracker-Token`, org/url из tenant (БД).
  */
@@ -113,37 +123,57 @@ export async function resolveTrackerApiConfigFromRequest(request: Request): Prom
   oauthToken: string;
   orgId: string;
 }> {
-  const oauthToken = cleanTrackerTokenFromRequest(request);
-  if (!oauthToken) {
-    throw new Error('Missing X-Tracker-Token header for Tracker API');
-  }
+  let oauthToken = cleanTrackerTokenFromRequest(request);
 
   const userId = getProductUserIdFromRequest(request);
   const rawOrgHeader = request.headers.get(TENANT_ORG_HEADER)?.trim();
   const orgParsed = rawOrgHeader ? UuidSchema.safeParse(rawOrgHeader) : null;
 
+  if (userId && orgParsed?.success) {
+    const { apiUrl, orgId } = await trackerCloudContextForProductOrganization(
+      userId,
+      orgParsed.data
+    );
+    return { apiUrl, oauthToken, orgId };
+  }
+
+  if (isOnPremMode()) {
+    const organizationId = orgParsed?.success
+      ? orgParsed.data
+      : await resolveDefaultOnPremOrganizationId();
+    if (!oauthToken) {
+      const storedToken = await getDecryptedOrganizationTrackerToken(organizationId);
+      oauthToken = storedToken?.replace(/\s+/g, '').trim() ?? '';
+      if (!oauthToken) {
+        throw new TrackerApiConfigError(
+          'Не найден токен Tracker: добавьте X-Tracker-Token или сохраните токен в настройках организации.',
+          422
+        );
+      }
+    }
+    const { apiUrl, orgId } =
+      await resolveTrackerCloudContextForProductOrganizationIdOnPrem(organizationId);
+    return { apiUrl, oauthToken, orgId };
+  }
+
+  if (!oauthToken) {
+    throw new Error('Missing X-Tracker-Token header for Tracker API');
+  }
+
   if (!userId) {
     throw new TrackerApiConfigError('Требуется сессия приложения.', 401);
   }
-  if (!orgParsed?.success) {
-    throw new TrackerApiConfigError(
-      'Передайте заголовок X-Organization-Id с UUID организации продукта.',
-      400
-    );
-  }
-
-  const { apiUrl, orgId } = await trackerCloudContextForProductOrganization(
-    userId,
-    orgParsed.data
+  throw new TrackerApiConfigError(
+    'Передайте заголовок X-Organization-Id с UUID организации продукта.',
+    400
   );
-  return { apiUrl, oauthToken, orgId };
 }
 
 /**
  * Для POST /api/auth/validate-token: org из заголовка или тела.
  * С сессией продукта — только организации, где есть членство; без сессии — только on-prem после инициализации.
  */
-export async function resolveValidateTokenTrackerContext(
+export function resolveValidateTokenTrackerContext(
   request: Request,
   bodyOrganizationId: unknown
 ): Promise<{ apiUrl: string; orgId: string }> {

@@ -14,6 +14,8 @@ import { muted } from '@/features/admin/adminUiTokens';
 import { AdminSyncSection } from '@/features/admin/components/AdminSyncSection';
 import { useAdminTrackerConnectionReady } from '@/features/admin/hooks/useAdminTrackerConnectionReady';
 
+const EXPORTER_ENABLED = process.env.NEXT_PUBLIC_EXPORTER_ENABLED !== 'false';
+
 export default function SyncPage() {
   const { t } = useI18n();
   const { confirm, DialogComponent } = useConfirmDialog();
@@ -46,6 +48,11 @@ export default function SyncPage() {
     setFormWindowStart(w?.start ?? '');
     setFormWindowEnd(w?.end ?? '');
   }, [syncView, settingsDirty]);
+
+  useEffect(() => {
+    if (EXPORTER_ENABLED) return;
+    router.replace('/admin/teams');
+  }, [router]);
 
   useEffect(() => {
     if (!connectOrgId || trackerGateLoading || trackerReady) return;
@@ -225,6 +232,10 @@ export default function SyncPage() {
         <p className={`text-sm ${muted}`}>{t('admin.common.pickOrgForSync')}</p>
       </>
     );
+  }
+
+  if (!EXPORTER_ENABLED) {
+    return null;
   }
 
   if (trackerGateLoading || !trackerReady) {

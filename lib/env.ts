@@ -7,7 +7,7 @@ import { timingSafeEqual } from 'crypto';
 
 export function getTrackerConfig() {
   return {
-    apiUrl: process.env.TRACKER_API_URL || 'https://api.tracker.yandex.net/v2',
+    apiUrl: process.env.TRACKER_API_URL || 'https://api.tracker.yandex.net/v3',
     // Умышленно не используем токен из переменных окружения –
     // авторизация всегда должна идти через пользовательский токен из заголовка.
     oauthToken: '',
@@ -258,6 +258,54 @@ export function getRedisUrl(): string | undefined {
 export function getSyncCronSecret(): string {
   const v = process.env.SYNC_CRON_SECRET;
   return typeof v === 'string' ? v.trim() : '';
+}
+
+export type DbContractMode = 'compatibility' | 'native';
+
+/**
+ * Режим источников данных для коммерческой БД:
+ * - native: чтение из beer_tracker.*
+ * - compatibility: разрешены fallback/read-only чтения из overseer/public.
+ */
+export function getDbContractMode(): DbContractMode {
+  const raw = process.env.DB_CONTRACT_MODE?.trim().toLowerCase();
+  return raw === 'compatibility' ? 'compatibility' : 'native';
+}
+
+export function isDbCompatibilityMode(): boolean {
+  return getDbContractMode() === 'compatibility';
+}
+
+/**
+ * Если true, preflight DB-контракта в compatibility-режиме фейлит запуск.
+ * false/0/off/no — только warning в лог.
+ */
+export function isDbContractPreflightStrict(): boolean {
+  const raw = process.env.DB_CONTRACT_PREFLIGHT_STRICT;
+  if (typeof raw !== 'string') {
+    return false;
+  }
+  const value = raw.trim().toLowerCase();
+  if (!value) {
+    return false;
+  }
+  return value !== 'false' && value !== '0' && value !== 'off' && value !== 'no';
+}
+
+/**
+ * Флаг встроенного экспортера (sync worker + sync admin section).
+ * false/0/off/no — выключен.
+ */
+export function isExporterEnabled(): boolean {
+  const raw = process.env.EXPORTER_ENABLED;
+  if (typeof raw !== 'string') {
+    return true;
+  }
+  const value = raw.trim().toLowerCase();
+  if (!value) {
+    return true;
+  }
+  return value !== 'false' && value !== '0' && value !== 'off' && value !== 'no';
 }
 
 /**

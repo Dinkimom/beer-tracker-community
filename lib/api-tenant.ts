@@ -18,8 +18,9 @@ import {
 } from '@/lib/access/orgAccess';
 import { getProductUserIdFromRequest } from '@/lib/auth/productSession';
 import { isProductSuperAdmin } from '@/lib/auth/superAdmin';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { findOrganizationMembership } from '@/lib/organizations/organizationMembersRepository';
-import { findOrganizationById } from '@/lib/organizations/organizationRepository';
+import { findOrganizationById, listAllOrganizationsAdminSummaries } from '@/lib/organizations/organizationRepository';
 import { TENANT_ORG_HEADER } from '@/lib/tenantHttpConstants';
 
 export { TENANT_ORG_HEADER };
@@ -76,6 +77,28 @@ export type TenantWithAdminProfileResult =
  * ({@link canUsePlanner}: org_admin или хотя бы одна команда).
  */
 export async function requireTenantContext(request: Request): Promise<RequirePlannerTenantResult> {
+  if (isOnPremMode()) {
+    const rawOrg = request.headers.get(TENANT_ORG_HEADER)?.trim();
+    const parsed = rawOrg ? UuidSchema.safeParse(rawOrg) : null;
+    const fromHeader = parsed?.success ? parsed.data : null;
+    const fallbackOrg = (await listAllOrganizationsAdminSummaries())[0]?.organization_id ?? null;
+    const organizationId = fromHeader ?? fallbackOrg;
+    if (!organizationId) {
+      return {
+        response: NextResponse.json({ error: 'Организация не найдена' }, { status: 503 }),
+      };
+    }
+    const userId = getProductUserIdFromRequest(request) ?? 'onprem-anonymous';
+    const ctx: TenantContext = { organizationId, role: 'org_admin', userId };
+    const profile: AccessProfile = {
+      organizationId,
+      orgRole: 'org_admin',
+      teamMemberships: [],
+      userId,
+    };
+    return { ctx, profile };
+  }
+
   const userId = getProductUserIdFromRequest(request);
   if (!userId) {
     return {

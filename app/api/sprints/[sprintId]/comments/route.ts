@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 import {
   CommentSchema,
@@ -19,6 +20,7 @@ export async function GET(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -45,9 +47,9 @@ export async function GET(
         created_at,
         updated_at
       FROM comments 
-      WHERE organization_id = $1 AND sprint_id = $2
+      WHERE ${onPrem ? 'sprint_id = $1' : 'organization_id = $1 AND sprint_id = $2'}
       ORDER BY created_at`,
-      [organizationId, sprintId]
+      onPrem ? [sprintId] : [organizationId, sprintId]
     );
 
     return NextResponse.json({ comments: result.rows });
@@ -70,6 +72,7 @@ export async function POST(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -100,13 +103,33 @@ export async function POST(
     const commentId = id || undefined;
 
     const result = await query(
-      `INSERT INTO comments (
-        id, organization_id, sprint_id, task_id, assignee_id, text,
-        position_x, position_y, day, part, width, height
-      ) VALUES (
-        COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
-      )
-      RETURNING 
+      onPrem
+        ? `INSERT INTO comments (
+             id, sprint_id, task_id, assignee_id, text,
+             position_x, position_y, day, part, width, height
+           ) VALUES (
+             COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+           )
+           RETURNING
+             id,
+             task_id,
+             assignee_id,
+             text,
+             position_x as x,
+             position_y as y,
+             day,
+             part,
+             width,
+             height,
+             created_at,
+             updated_at`
+        : `INSERT INTO comments (
+             id, organization_id, sprint_id, task_id, assignee_id, text,
+             position_x, position_y, day, part, width, height
+           ) VALUES (
+             COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+           )
+           RETURNING
         id,
         task_id,
         assignee_id,
@@ -119,7 +142,9 @@ export async function POST(
         height,
         created_at,
         updated_at`,
-      [commentId, organizationId, sprintId, taskId ?? null, assigneeId, text, x ?? null, y ?? null, day ?? null, part ?? null, width ?? 200, height ?? 100]
+      onPrem
+        ? [commentId, sprintId, taskId ?? null, assigneeId, text, x ?? null, y ?? null, day ?? null, part ?? null, width ?? 200, height ?? 100]
+        : [commentId, organizationId, sprintId, taskId ?? null, assigneeId, text, x ?? null, y ?? null, day ?? null, part ?? null, width ?? 200, height ?? 100]
     );
 
     return NextResponse.json({ comment: result.rows[0] });
@@ -142,6 +167,7 @@ export async function PUT(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -170,7 +196,7 @@ export async function PUT(
         day = COALESCE($8, day),
         part = COALESCE($9, part),
         updated_at = CURRENT_TIMESTAMP
-      WHERE organization_id = $10 AND sprint_id = $11 AND id = $12
+      WHERE ${onPrem ? 'sprint_id = $10 AND id = $11' : 'organization_id = $10 AND sprint_id = $11 AND id = $12'}
       RETURNING 
         id,
         task_id,
@@ -184,7 +210,9 @@ export async function PUT(
         height,
         created_at,
         updated_at`,
-      [text, x, y, width, height, assigneeId, taskId ?? null, day ?? null, part ?? null, organizationId, sprintId, commentId]
+      onPrem
+        ? [text, x, y, width, height, assigneeId, taskId ?? null, day ?? null, part ?? null, sprintId, commentId]
+        : [text, x, y, width, height, assigneeId, taskId ?? null, day ?? null, part ?? null, organizationId, sprintId, commentId]
     );
 
     if (result.rows.length === 0) {
@@ -214,6 +242,7 @@ export async function DELETE(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -228,8 +257,10 @@ export async function DELETE(
     }
 
     await query(
-      'DELETE FROM comments WHERE organization_id = $1 AND sprint_id = $2 AND id = $3',
-      [organizationId, sprintId, commentId]
+      onPrem
+        ? 'DELETE FROM comments WHERE sprint_id = $1 AND id = $2'
+        : 'DELETE FROM comments WHERE organization_id = $1 AND sprint_id = $2 AND id = $3',
+      onPrem ? [sprintId, commentId] : [organizationId, sprintId, commentId]
     );
 
     return NextResponse.json({ success: true });

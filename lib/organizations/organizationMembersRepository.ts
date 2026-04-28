@@ -1,5 +1,7 @@
 /**
- * Членство пользователей в организациях (organization_members).
+ * Членство пользователей в организации:
+ * - админ-права из users.is_super_admin
+ * - доступ к планеру из public.registry_employees (по email).
  */
 
 import type {
@@ -8,46 +10,77 @@ import type {
   UserOrganizationSummary,
 } from './types';
 
-import { pool, qualifyBeerTrackerTables, query } from '@/lib/db';
+import { findUserById } from '@/lib/auth';
+import { query } from '@/lib/db';
+import { findOrganizationById, listAllOrganizationsAdminSummaries } from '@/lib/organizations/organizationRepository';
 
 export async function findOrganizationMembership(
   organizationId: string,
   userId: string
 ): Promise<OrganizationMemberRow | null> {
-  const res = await query<OrganizationMemberRow>(
-    `SELECT id, organization_id, user_id, role, created_at
-     FROM organization_members
-     WHERE organization_id = $1 AND user_id = $2`,
-    [organizationId, userId]
+  const [org, user] = await Promise.all([findOrganizationById(organizationId), findUserById(userId)]);
+  if (!org || !user) {
+    return null;
+  }
+  if (user.is_super_admin) {
+    return {
+      id: `${organizationId}:${userId}`,
+      organization_id: organizationId,
+      user_id: userId,
+      role: 'org_admin',
+      created_at: user.created_at,
+    };
+  }
+  const registry = await query<{ one: number }>(
+    `SELECT 1 AS one
+     FROM public.registry_employees re
+     WHERE re.email IS NOT NULL
+       AND LOWER(TRIM(re.email)) = LOWER(TRIM($1))
+     LIMIT 1`,
+    [user.email]
   );
-  return res.rows[0] ?? null;
+  if (registry.rows.length === 0) {
+    return null;
+  }
+  return {
+    id: `${organizationId}:${userId}`,
+    organization_id: organizationId,
+    user_id: userId,
+    role: 'member',
+    created_at: user.created_at,
+  };
 }
 
 export async function listUserOrganizations(
   userId: string
 ): Promise<UserOrganizationSummary[]> {
-  const res = await query<UserOrganizationSummary>(
-    `SELECT o.id AS organization_id, o.name, o.slug, o.initial_sync_completed_at, om.role
-     FROM organization_members om
-     INNER JOIN organizations o ON o.id = om.organization_id
-     WHERE om.user_id = $1
-     ORDER BY o.name ASC`,
-    [userId]
-  );
-  return res.rows;
+  const user = await findUserById(userId);
+  if (!user) {
+    return [];
+  }
+  const orgs = await listAllOrganizationsAdminSummaries();
+  if (user.is_super_admin) {
+    return orgs;
+  }
+  return orgs.map((o) => ({ ...o, role: 'member' as const }));
 }
 
 export async function listOrganizationMembers(
   organizationId: string
 ): Promise<OrganizationMemberRow[]> {
+  const org = await findOrganizationById(organizationId);
+  if (!org) {
+    return [];
+  }
   const res = await query<OrganizationMemberRow>(
-    `SELECT id, organization_id, user_id, role, created_at
-     FROM organization_members
-     WHERE organization_id = $1
-     ORDER BY created_at ASC`,
+    `SELECT u.id AS id, $1::uuid AS organization_id, u.id AS user_id,
+            CASE WHEN u.is_super_admin THEN 'org_admin' ELSE 'member' END AS role,
+            u.created_at
+     FROM users u
+     ORDER BY u.created_at ASC`,
     [organizationId]
   );
-  return res.rows;
+  return res.rows as OrganizationMemberRow[];
 }
 
 /** Команды пользователя в организации (из user_team_memberships). */
@@ -83,39 +116,200 @@ export interface OrganizationMemberDirectoryRow {
   user_id: string;
 }
 
+export interface TeamDirectoryMemberRow {
+  avatar_link: string | null;
+  email: string | null;
+  full_name: string | null;
+  name: string | null;
+  patronymic: string | null;
+  staff_uid: string;
+  surname: string | null;
+  tracker_id: string | null;
+}
+
+export interface TeamDirectoryRow {
+  active: boolean;
+  board: number | null;
+  queue: string | null;
+  team_id: string;
+  team_slug: string | null;
+  team_title: string;
+}
+
+export interface OrganizationTeamDirectoryItem {
+  members: TeamDirectoryMemberRow[];
+  team: TeamDirectoryRow;
+}
+
+export interface RegistryEmployeeDirectoryRow {
+  avatar_link: string | null;
+  email: string | null;
+  employee_id: string;
+  fired_date: string | null;
+  full_name: string | null;
+  name: string | null;
+  patronymic: string | null;
+  staff_uid: string;
+  status: string | null;
+  surname: string | null;
+  teams: Array<{ team_id: string; team_title: string }>;
+  tracker_id: string | null;
+}
+
+export async function listOrganizationTeamsWithMembersFromOverseer(
+  organizationId: string
+): Promise<OrganizationTeamDirectoryItem[]> {
+  const org = await findOrganizationById(organizationId);
+  if (!org) {
+    return [];
+  }
+  const teamsRes = await query<TeamDirectoryRow>(
+    `SELECT
+        t.uid::text AS team_id,
+        t.slug AS team_slug,
+        t.title AS team_title,
+        t.queue,
+        t.board,
+        COALESCE(t.active, TRUE) AS active
+     FROM overseer.teams t
+     ORDER BY t.title ASC`
+  );
+  const teams = teamsRes.rows;
+  if (teams.length === 0) {
+    return [];
+  }
+
+  const membersRes = await query<
+    TeamDirectoryMemberRow & {
+      team_id: string;
+    }
+  >(
+    `SELECT
+        st.team_uid::text AS team_id,
+        st.staff_uid::text AS staff_uid,
+        re.tracker_id,
+        re.avatar_link,
+        re.email,
+        re.name,
+        re.surname,
+        re.patronymic,
+        re.fullname AS full_name
+     FROM overseer.staff_teams st
+     LEFT JOIN public.registry_employees re ON re.uuid = st.staff_uid`
+  );
+
+  const membersByTeam = new Map<string, TeamDirectoryMemberRow[]>();
+  for (const row of membersRes.rows) {
+    const arr = membersByTeam.get(row.team_id) ?? [];
+    arr.push({
+      avatar_link: row.avatar_link,
+      email: row.email,
+      full_name: row.full_name,
+      name: row.name,
+      patronymic: row.patronymic,
+      staff_uid: row.staff_uid,
+      surname: row.surname,
+      tracker_id: row.tracker_id,
+    });
+    membersByTeam.set(row.team_id, arr);
+  }
+
+  return teams.map((team) => ({
+    team,
+    members: (membersByTeam.get(team.team_id) ?? []).sort((a, b) => {
+      const aName = (a.full_name ?? `${a.surname ?? ''} ${a.name ?? ''}`.trim() ?? a.staff_uid).trim();
+      const bName = (b.full_name ?? `${b.surname ?? ''} ${b.name ?? ''}`.trim() ?? b.staff_uid).trim();
+      return aName.localeCompare(bName, 'ru');
+    }),
+  }));
+}
+
+export async function listRegistryEmployeesDirectory(
+  organizationId: string
+): Promise<RegistryEmployeeDirectoryRow[]> {
+  const org = await findOrganizationById(organizationId);
+  if (!org) {
+    return [];
+  }
+
+  const res = await query<RegistryEmployeeDirectoryRow>(
+    `SELECT
+        re.id::text AS employee_id,
+        COALESCE(re.uuid::text, re.id::text) AS staff_uid,
+        re.tracker_id,
+        re.email,
+        re.name,
+        re.surname,
+        re.patronymic,
+        re.fullname AS full_name,
+        re.status,
+        re.avatar_link,
+        re.fired_date::text AS fired_date,
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'team_id', t.uid::text,
+                'team_title', t.title
+              )
+              ORDER BY t.title
+            )
+            FROM overseer.staff_teams st
+            INNER JOIN overseer.teams t ON t.uid = st.team_uid
+            WHERE st.staff_uid = re.uuid
+          ),
+          '[]'::json
+        ) AS teams
+     FROM public.registry_employees re
+     ORDER BY COALESCE(NULLIF(TRIM(re.fullname), ''), re.email, re.tracker_id::text, re.id::text) ASC`
+  );
+
+  return res.rows.map((row) => ({
+    ...row,
+    teams: Array.isArray(row.teams) ? row.teams : [],
+  }));
+}
+
 export async function listOrganizationMemberDirectory(
   organizationId: string
 ): Promise<OrganizationMemberDirectoryRow[]> {
+  const org = await findOrganizationById(organizationId);
+  if (!org) {
+    return [];
+  }
   const res = await query<OrganizationMemberDirectoryRow>(
-    `SELECT om.user_id, om.role AS org_role, u.email, om.created_at,
+    `SELECT u.id AS user_id,
+            CASE WHEN u.is_super_admin THEN 'org_admin' ELSE 'member' END AS org_role,
+            u.email,
+            u.created_at,
             EXISTS (
               SELECT 1
-              FROM user_team_memberships utm
-              INNER JOIN teams t ON t.id = utm.team_id AND t.organization_id = om.organization_id
-              WHERE utm.user_id = om.user_id
+              FROM public.registry_employees re
+              INNER JOIN overseer.staff_teams st ON st.staff_uid = re.uuid
+              WHERE re.email IS NOT NULL
+                AND LOWER(TRIM(re.email)) = LOWER(TRIM(u.email))
             ) AS has_team_membership,
             COALESCE(
               (
                 SELECT json_agg(
                   json_build_object(
-                    'team_id', t.id,
+                    'team_id', t.uid::text,
                     'title', t.title,
-                    'is_team_lead', utm.is_team_lead,
-                    'is_team_member', utm.is_team_member
+                    'is_team_lead', false,
+                    'is_team_member', true
                   )
                   ORDER BY t.title
                 )
-                FROM user_team_memberships utm
-                INNER JOIN teams t ON t.id = utm.team_id AND t.organization_id = om.organization_id
-                WHERE utm.user_id = om.user_id
+                FROM public.registry_employees re
+                INNER JOIN overseer.staff_teams st ON st.staff_uid = re.uuid
+                INNER JOIN overseer.teams t ON t.uid = st.team_uid
+                WHERE re.email IS NOT NULL
+                  AND LOWER(TRIM(re.email)) = LOWER(TRIM(u.email))
               ),
               '[]'::json
             ) AS teams_json
-     FROM organization_members om
-     INNER JOIN users u ON u.id = om.user_id
-     WHERE om.organization_id = $1
-     ORDER BY om.created_at ASC`,
-    [organizationId]
+     FROM users u
+     ORDER BY u.created_at ASC`
   );
   return res.rows;
 }
@@ -134,28 +328,34 @@ export async function insertOrganizationMember(
   userId: string,
   role: OrgMemberRole
 ): Promise<OrganizationMemberRow> {
-  const res = await query<OrganizationMemberRow>(
-    `INSERT INTO organization_members (organization_id, user_id, role)
-     VALUES ($1, $2, $3)
-     RETURNING id, organization_id, user_id, role, created_at`,
-    [organizationId, userId, role]
-  );
-  const row = res.rows[0];
-  if (!row) {
-    throw new Error('insertOrganizationMember: no row returned');
+  const user = await findUserById(userId);
+  const org = await findOrganizationById(organizationId);
+  if (!user || !org) {
+    throw new Error('insertOrganizationMember: user or organization not found');
   }
-  return row;
+  if (role === 'org_admin') {
+    await query(`UPDATE users SET is_super_admin = TRUE WHERE id = $1`, [userId]);
+  }
+  return (await findOrganizationMembership(organizationId, userId)) as OrganizationMemberRow;
 }
 
 export async function countOrganizationMembersByRole(
   organizationId: string,
   role: OrgMemberRole
 ): Promise<number> {
+  const org = await findOrganizationById(organizationId);
+  if (!org) {
+    return 0;
+  }
+  if (role === 'org_admin') {
+    const admins = await query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM users WHERE is_super_admin = TRUE`
+    );
+    const n = Number.parseInt(admins.rows[0]?.count ?? '0', 10);
+    return Number.isFinite(n) ? n : 0;
+  }
   const res = await query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count
-     FROM organization_members
-     WHERE organization_id = $1 AND role = $2`,
-    [organizationId, role]
+    `SELECT COUNT(*)::text AS count FROM users WHERE is_super_admin = FALSE`
   );
   const n = Number.parseInt(res.rows[0]?.count ?? '0', 10);
   return Number.isFinite(n) ? n : 0;
@@ -166,98 +366,36 @@ export async function updateOrganizationMemberRole(
   userId: string,
   role: OrgMemberRole
 ): Promise<OrganizationMemberRow | null> {
-  const res = await query<OrganizationMemberRow>(
-    `UPDATE organization_members
-     SET role = $3
-     WHERE organization_id = $1 AND user_id = $2
-     RETURNING id, organization_id, user_id, role, created_at`,
-    [organizationId, userId, role]
-  );
-  return res.rows[0] ?? null;
+  const current = await findOrganizationMembership(organizationId, userId);
+  if (!current) {
+    return null;
+  }
+  if (role === 'org_admin') {
+    await query(`UPDATE users SET is_super_admin = TRUE WHERE id = $1`, [userId]);
+  } else {
+    await query(`UPDATE users SET is_super_admin = FALSE WHERE id = $1`, [userId]);
+  }
+  return findOrganizationMembership(organizationId, userId);
 }
 
 export async function deleteOrganizationMember(
   organizationId: string,
   userId: string
 ): Promise<boolean> {
-  const res = await query(
-    `DELETE FROM organization_members
-     WHERE organization_id = $1 AND user_id = $2`,
-    [organizationId, userId]
-  );
-  return (res.rowCount ?? 0) > 0;
+  const org = await findOrganizationById(organizationId);
+  if (!org) {
+    return false;
+  }
+  await query(`UPDATE users SET is_super_admin = FALSE WHERE id = $1`, [userId]);
+  return true;
 }
 
-/**
- * Удаляет учётную запись пользователя, если он состоит в этой организации.
- * Снимает строки team_members по совпадению email со staff, удаляет «осиротевший» staff без команд,
- * затем удаляет users (CASCADE: organization_members, user_team_memberships).
- */
-export async function deleteOrganizationUserAccount(
+export function deleteOrganizationUserAccount(
   organizationId: string,
   userId: string
 ): Promise<boolean> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const emailRes = await client.query<{ email: string }>(
-      qualifyBeerTrackerTables(
-        `SELECT u.email::text AS email
-         FROM users u
-         INNER JOIN organization_members om
-           ON om.user_id = u.id AND om.organization_id = $1
-         WHERE u.id = $2`
-      ),
-      [organizationId, userId]
-    );
-    const emailNorm = emailRes.rows[0]?.email?.trim().toLowerCase();
-
-    if (emailNorm) {
-      await client.query(
-        qualifyBeerTrackerTables(
-          `DELETE FROM team_members tm
-           WHERE tm.team_id IN (SELECT id FROM teams t WHERE t.organization_id = $1)
-             AND tm.staff_id IN (
-               SELECT s.id FROM staff s
-               WHERE s.organization_id = $1
-                 AND s.email IS NOT NULL
-                 AND LOWER(TRIM(s.email)) = $2
-             )`
-        ),
-        [organizationId, emailNorm]
-      );
-
-      await client.query(
-        qualifyBeerTrackerTables(
-          `DELETE FROM staff s
-           WHERE s.organization_id = $1
-             AND s.email IS NOT NULL
-             AND LOWER(TRIM(s.email)) = $2
-             AND NOT EXISTS (SELECT 1 FROM team_members tm WHERE tm.staff_id = s.id)`
-        ),
-        [organizationId, emailNorm]
-      );
-    }
-
-    const del = await client.query(
-      qualifyBeerTrackerTables(
-        `DELETE FROM users u
-         WHERE u.id = $2
-           AND EXISTS (
-             SELECT 1 FROM organization_members om
-             WHERE om.organization_id = $1 AND om.user_id = u.id
-           )`
-      ),
-      [organizationId, userId]
-    );
-
-    await client.query('COMMIT');
-    return (del.rowCount ?? 0) > 0;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+  if (organizationId || userId) {
+    // В новой модели удаление людей из реестра запрещено.
   }
+  return Promise.resolve(false);
 }

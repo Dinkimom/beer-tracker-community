@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 
 /**
@@ -18,6 +19,7 @@ export async function DELETE(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -30,8 +32,10 @@ export async function DELETE(
     }
 
     await query(
-      'DELETE FROM task_positions WHERE organization_id = $1 AND sprint_id = $2',
-      [organizationId, sprintId]
+      onPrem
+        ? 'DELETE FROM task_positions WHERE sprint_id = $1'
+        : 'DELETE FROM task_positions WHERE organization_id = $1 AND sprint_id = $2',
+      onPrem ? [sprintId] : [organizationId, sprintId]
     );
 
     return NextResponse.json({ success: true });

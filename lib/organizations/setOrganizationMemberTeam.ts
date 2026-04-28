@@ -2,11 +2,8 @@ import { findUserById } from '@/lib/auth';
 import { CATALOG_TEAMLEAD_SLUG } from '@/lib/organizations/invitedTeamRoleFromCatalogSlug';
 import { findOrganizationMembership } from '@/lib/organizations/organizationMembersRepository';
 import {
-  deleteUserTeamMembershipsForUserInOrganization,
   listUserTeamMembershipsInOrganization,
-  productTeamRoleToFlags,
   type ProductTeamRole,
-  upsertUserTeamMembership,
 } from '@/lib/organizations/userTeamMembershipRepository';
 import {
   addTeamMember,
@@ -30,7 +27,7 @@ export type SetOrganizationMemberTeamResult =
   { error: string; status: number } | { ok: true };
 
 /**
- * Снимает пользователя со всех команд организации (staff + team_members + user_team_memberships)
+ * Снимает пользователя со всех команд организации (staff + team_members)
  * и при необходимости добавляет в указанную команду с ролью планера.
  */
 export async function setOrganizationMemberTeam(input: {
@@ -87,8 +84,6 @@ export async function setOrganizationMemberTeam(input: {
     }
   }
 
-  await deleteUserTeamMembershipsForUserInOrganization(orgId, userId);
-
   if (targetTeamId == null) {
     return { ok: true };
   }
@@ -112,18 +107,8 @@ export async function setOrganizationMemberTeam(input: {
     return { error: 'Не удалось добавить: команда или сотрудник не найдены', status: 404 };
   }
 
-  const flags = productTeamRoleToFlags(roleForAssign);
-  try {
-    await upsertUserTeamMembership({
-      isTeamLead: flags.isTeamLead,
-      isTeamMember: flags.isTeamMember,
-      teamId: targetTeamId,
-      userId,
-    });
-  } catch (e) {
-    await removeTeamMember(orgId, targetTeamId, staffRow.id);
-    const msg = e instanceof Error ? e.message : 'Не удалось выдать доступ к планеру';
-    return { error: msg, status: 409 };
+  if (!userId) {
+    return { error: 'Пользователь не найден', status: 404 };
   }
 
   return { ok: true };

@@ -4,6 +4,7 @@ import { filterTeamsVisibleInPlanner } from '@/lib/access/orgAccess';
 import { handleApiError } from '@/lib/api-error-handler';
 import { requireTenantContext } from '@/lib/api-tenant';
 import { getTrackerApiFromRequest } from '@/lib/api-tracker';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { listTeams } from '@/lib/staffTeams';
 import { fetchTrackerBoardsPaginate } from '@/lib/trackerApi';
 
@@ -19,13 +20,20 @@ export async function GET(request: NextRequest) {
     }
     const { ctx, profile } = tenantResult;
     const { organizationId } = ctx;
-
-    const trackerApi = await getTrackerApiFromRequest(request);
-    const [trackerBoards, orgTeamsAll] = await Promise.all([
-      fetchTrackerBoardsPaginate(trackerApi),
-      listTeams(organizationId, { activeOnly: true }),
-    ]);
+    const orgTeamsAll = await listTeams(organizationId, { activeOnly: true });
     const orgTeams = filterTeamsVisibleInPlanner(profile, orgTeamsAll);
+
+    let trackerBoards: Awaited<ReturnType<typeof fetchTrackerBoardsPaginate>> = [];
+    try {
+      const trackerApi = await getTrackerApiFromRequest(request);
+      trackerBoards = await fetchTrackerBoardsPaginate(trackerApi);
+    } catch (error) {
+      if (!isOnPremMode()) {
+        throw error;
+      }
+      // On-prem may rely on DB-backed team catalog even when Tracker auth is temporarily unavailable.
+      trackerBoards = [];
+    }
     const accessibleBoardIds = new Set(trackerBoards.map((b) => b.id));
     const boardNameById = new Map(trackerBoards.map((b) => [b.id, b.name]));
 
@@ -36,7 +44,7 @@ export async function GET(request: NextRequest) {
       })
       .filter(
         (x): x is { boardNum: number; team: (typeof orgTeams)[0] } =>
-          x !== null && accessibleBoardIds.has(x.boardNum)
+          x !== null && (trackerBoards.length === 0 || accessibleBoardIds.has(x.boardNum))
       )
       .map(({ team, boardNum }) => ({
         id: boardNum,

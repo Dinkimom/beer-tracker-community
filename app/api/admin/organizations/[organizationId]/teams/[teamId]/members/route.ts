@@ -15,6 +15,7 @@ import {
   userHasTeamMembershipInOrganization,
 } from '@/lib/organizations/userTeamMembershipRepository';
 import {
+  addOverseerTeamMember,
   addTeamMember,
   enrichTeamMembersDisplayNamesFromTracker,
   findStaffByOrganizationAndEmailNorm,
@@ -30,17 +31,20 @@ const PostBodySchema = z
     display_name: z.string().trim().min(1).max(512).optional(),
     email: z.string().trim().email().max(320).optional(),
     role_slug: z.string().trim().min(1).max(128).optional().nullable(),
+    staff_uid: z.string().uuid().optional(),
     tracker_user_id: z.string().min(1).max(256).optional(),
     user_id: z.string().uuid().optional(),
   })
   .superRefine((data, ctx) => {
     const byUser = Boolean(data.user_id);
     const byTracker = Boolean(data.tracker_user_id);
-    if (byUser === byTracker) {
+    const byRegistry = Boolean(data.staff_uid);
+    const methods = Number(byUser) + Number(byTracker) + Number(byRegistry);
+    if (methods !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          'Укажите либо user_id (пользователь уже в системе), либо tracker_user_id вместе с email',
+          'Укажите ровно один способ: user_id, staff_uid или tracker_user_id (+ email)',
       });
     }
     if (byTracker && !data.email?.trim()) {
@@ -139,7 +143,14 @@ export async function POST(
 
   const orgId = auth.ctx.organizationId;
   const teamId = teamIdParsed.data;
-  const { display_name, email, role_slug: roleSlug, tracker_user_id: trackerUserId, user_id: bodyUserId } =
+  const {
+    display_name,
+    email,
+    role_slug: roleSlug,
+    staff_uid: staffUid,
+    tracker_user_id: trackerUserId,
+    user_id: bodyUserId,
+  } =
     parsed.data;
 
   const team = await findTeamById(orgId, teamId);
@@ -201,6 +212,23 @@ export async function POST(
     });
 
     return NextResponse.json({ member }, { status: 201 });
+  }
+
+  if (staffUid) {
+    const added = await addOverseerTeamMember(teamId, staffUid);
+    if (!added) {
+      return NextResponse.json({ error: 'Сотрудник уже состоит в этой команде' }, { status: 409 });
+    }
+    return NextResponse.json(
+      {
+        member: {
+          role_slug: roleSlug ?? null,
+          staff_id: staffUid,
+          team_id: teamId,
+        },
+      },
+      { status: 201 }
+    );
   }
 
   const emailStr = email!;

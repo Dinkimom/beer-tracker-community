@@ -41,20 +41,13 @@ export async function POST(
 
   const parsed = CreateBodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: formatValidationError(parsed.error) },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: formatValidationError(parsed.error) }, { status: 400 });
   }
 
   const { slug, title, domainRole, platforms } = parsed.data;
   const slugNorm = slug.trim().toLowerCase();
-
   if (await systemRoleSlugExists(slugNorm)) {
-    return NextResponse.json(
-      { error: 'Этот slug зарезервирован системной ролью' },
-      { status: 409 }
-    );
+    return NextResponse.json({ error: 'Роль с таким slug уже существует' }, { status: 409 });
   }
 
   const row = await createOrgRole(auth.ctx.organizationId, {
@@ -63,13 +56,12 @@ export async function POST(
     slug: slugNorm,
     title,
   });
-
   if (!row) {
-    return NextResponse.json(
-      { error: 'Роль с таким slug уже существует в организации' },
-      { status: 409 }
-    );
+    return NextResponse.json({ error: 'Не удалось создать роль' }, { status: 409 });
   }
 
-  return NextResponse.json({ role: orgRoleToEntry(row) }, { status: 201 });
+  return NextResponse.json(
+    { role: orgRoleToEntry(row) },
+    { status: 201 }
+  );
 }

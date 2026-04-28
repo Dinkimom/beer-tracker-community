@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { requireTenantOrgAdmin } from '@/lib/api-tenant';
 import {
   countOrganizationMembersByRole,
-  deleteOrganizationUserAccount,
   findOrganizationMembership,
   updateOrganizationMemberRole,
 } from '@/lib/organizations/organizationMembersRepository';
@@ -95,7 +94,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/admin/organizations/[organizationId]/members/[userId]
- * org_admin: удалить учётную запись участника этой организации (в модели одна организация на пользователя).
+ * Удаление людей запрещено: можно менять только состав команд.
  */
 export async function DELETE(
   request: Request,
@@ -139,16 +138,8 @@ export async function DELETE(
       );
     }
   }
-
-  try {
-    const deleted = await deleteOrganizationUserAccount(orgId, targetUserId);
-    if (!deleted) {
-      return NextResponse.json({ error: 'Не удалось удалить пользователя' }, { status: 500 });
-    }
-  } catch (err) {
-    console.error('[DELETE organization member user]', err);
-    return NextResponse.json({ error: 'Внутренняя ошибка' }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(
+    { error: 'Удаление пользователей из реестра запрещено. Используйте удаление из команды.' },
+    { status: 409 }
+  );
 }

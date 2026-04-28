@@ -6,6 +6,11 @@ import type { QueryParams } from '@/types';
 import type { TrackerIssue } from '@/types/tracker';
 
 import { query } from '@/lib/db';
+import { isDbCompatibilityMode } from '@/lib/env';
+import {
+  findOverseerIssueByKey,
+  queryOverseerIssuesByQueue,
+} from '@/lib/snapshots/overseerRawIssuesRead';
 
 export interface PagedTrackerIssues {
   issues: TrackerIssue[];
@@ -99,11 +104,36 @@ export async function queryEpicSnapshotsForOrgQueue(
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
     listArgs
   );
+  const pgIssues = res.rows.map((r) => r.payload);
+  if (pgIssues.length > 0 || !isDbCompatibilityMode()) {
+    return {
+      issues: pgIssues,
+      totalCount,
+      totalPages,
+    };
+  }
+  const fallback = await queryOverseerIssuesByQueue(queue);
+  const epics = fallback.filter(
+    (issue) => (issue.type?.key ?? '').toLowerCase() === 'epic'
+  );
+  const filtered =
+    minYear !== undefined
+      ? epics.filter((issue) => {
+          const created = issue.createdAt ?? '';
+          const year = /^\d{4}-/.test(created)
+            ? Number.parseInt(created.slice(0, 4), 10)
+            : Number.NaN;
+          return Number.isFinite(year) ? year >= minYear : true;
+        })
+      : epics;
+  const paged = filtered.slice(offset, offset + n);
+  const fallbackTotal = filtered.length;
+  const fallbackPages = fallbackTotal === 0 ? 0 : Math.ceil(fallbackTotal / n);
 
   return {
-    issues: res.rows.map((r) => r.payload),
-    totalCount,
-    totalPages,
+    issues: paged,
+    totalCount: fallbackTotal,
+    totalPages: fallbackPages,
   };
 }
 
@@ -187,11 +217,43 @@ export async function queryStorySnapshotsForOrgQueue(
      LIMIT $${limitP} OFFSET $${offsetP}`,
     listArgs
   );
+  const pgIssues = res.rows.map((r) => r.payload);
+  if (pgIssues.length > 0 || !isDbCompatibilityMode()) {
+    return {
+      issues: pgIssues,
+      totalCount,
+      totalPages,
+    };
+  }
+  const fallback = await queryOverseerIssuesByQueue(queue);
+  let stories = fallback.filter(
+    (issue) => (issue.type?.key ?? '').toLowerCase() === 'story'
+  );
+  if (options.epicKey?.trim()) {
+    const epicKey = options.epicKey.trim();
+    stories = stories.filter((issue) => issue.parent?.key === epicKey);
+  } else if (options.requireParent) {
+    stories = stories.filter((issue) => Boolean(issue.parent?.key?.trim()));
+  } else if (options.withoutParent) {
+    stories = stories.filter((issue) => !issue.parent?.key?.trim());
+  }
+  if (options.minYear !== undefined) {
+    stories = stories.filter((issue) => {
+      const created = issue.createdAt ?? '';
+      const year = /^\d{4}-/.test(created)
+        ? Number.parseInt(created.slice(0, 4), 10)
+        : Number.NaN;
+      return Number.isFinite(year) ? year >= options.minYear! : true;
+    });
+  }
+  const paged = stories.slice(offset, offset + n);
+  const fallbackTotal = stories.length;
+  const fallbackPages = fallbackTotal === 0 ? 0 : Math.ceil(fallbackTotal / n);
 
   return {
-    issues: res.rows.map((r) => r.payload),
-    totalCount,
-    totalPages,
+    issues: paged,
+    totalCount: fallbackTotal,
+    totalPages: fallbackPages,
   };
 }
 
@@ -203,6 +265,35 @@ export async function fetchEpicDeepFromSnapshots(
   epicKey: string
 ): Promise<EpicDeepSnapshotResult> {
   const key = epicKey.trim();
+  if (isDbCompatibilityMode()) {
+    const epic = await findOverseerIssueByKey(key);
+    if (epic) {
+      const epicAny = epic as unknown as { queue?: string | { id?: string; key?: string } };
+      const queueKey =
+        (typeof epicAny.queue === 'object' && epicAny.queue
+          ? (epicAny.queue.key ?? epicAny.queue.id)
+          : undefined) ??
+        (typeof epicAny.queue === 'string' ? epicAny.queue : '');
+      const queueIssues = queueKey ? await queryOverseerIssuesByQueue(queueKey) : [];
+      const storiesRaw = queueIssues.filter(
+        (issue) =>
+          (issue.type?.key ?? '').toLowerCase() === 'story' &&
+          issue.parent?.key === key
+      );
+      const stories: EpicDeepStoryBundle[] = storiesRaw
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map((story) => ({
+          story,
+          tasks: queueIssues.filter((issue) => {
+            const t = (issue.type?.key ?? '').toLowerCase();
+            return (t === 'task' || t === 'bug') && issue.parent?.key === story.key;
+          }),
+        }));
+      if (stories.length > 0) {
+        return { epic, stories };
+      }
+    }
+  }
   const res = await query<SnapshotDbRow>(
     `SELECT organization_id, issue_key, payload, tracker_updated_at, synced_at
      FROM issue_snapshots i

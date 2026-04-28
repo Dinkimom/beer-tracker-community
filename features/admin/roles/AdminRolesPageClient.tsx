@@ -4,8 +4,6 @@ import type { RoleCatalogEntry } from "@/lib/roles/catalog";
 
 import { AdminOrganizationRolesPanel } from "./components/AdminOrganizationRolesPanel";
 import { AdminRolesPageHeader } from "./components/AdminRolesPageHeader";
-import { AdminRolesTabList } from "./components/AdminRolesTabList";
-import { AdminSystemRolesPanel } from "./components/AdminSystemRolesPanel";
 import { useAdminOrgRoles } from "./hooks/useAdminOrgRoles";
 
 interface AdminRolesPageClientProps {
@@ -19,19 +17,6 @@ export function AdminRolesPageClient({ organizationId, roles }: AdminRolesPageCl
   return (
     <div className="space-y-6">
       <AdminRolesPageHeader />
-
-      <AdminRolesTabList
-        activeRolesTab={r.activeRolesTab}
-        orgRolesCount={r.orgRoles.length}
-        systemRolesCount={r.systemRoles.length}
-        onTabChange={r.setActiveRolesTab}
-      />
-
-      <AdminSystemRolesPanel
-        hidden={r.activeRolesTab !== "system"}
-        systemRoles={r.systemRoles}
-      />
-
       <AdminOrganizationRolesPanel
         form={{
           createBusy: r.createBusy,
@@ -47,7 +32,7 @@ export function AdminRolesPageClient({ organizationId, roles }: AdminRolesPageCl
           submitCreate: r.submitCreate,
           toggleNewPlatform: r.toggleNewPlatform,
         }}
-        hidden={r.activeRolesTab !== "organization"}
+        hidden={false}
         orgRoles={r.orgRoles}
         table={{
           beginEdit: r.beginEdit,

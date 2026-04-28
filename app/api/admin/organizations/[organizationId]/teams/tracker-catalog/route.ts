@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { handleApiError } from '@/lib/api-error-handler';
-import { requireTenantOrgAdmin } from '@/lib/api-tenant';
+import { requireTenantWithAdminProfile } from '@/lib/api-tenant';
 import { apiCache, cacheKeys } from '@/lib/cache';
 import {
   findOrganizationById,
@@ -30,7 +30,7 @@ export async function GET(
   routeContext: { params: Promise<{ organizationId: string }> }
 ) {
   const { organizationId } = await routeContext.params;
-  const auth = await requireTenantOrgAdmin(request, organizationId);
+  const auth = await requireTenantWithAdminProfile(request, organizationId);
   if ('response' in auth) {
     return auth.response;
   }

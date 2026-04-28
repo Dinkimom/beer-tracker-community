@@ -10,7 +10,14 @@ import type {
 import type { QueryParams } from '@/types';
 
 import { query } from '@/lib/db';
+import { isDbCompatibilityMode } from '@/lib/env';
+import { issuePayloadMatchesBacklogFilters } from '@/lib/snapshots/backlogPayload';
 
+import {
+  findOverseerIssueByKey,
+  findOverseerIssuesByKeys,
+  queryOverseerIssuesByQueue,
+} from './overseerRawIssuesRead';
 import { statusKeyTypeKeySummaryFromPayload } from './snapshotPayloadSummary';
 
 const DEFAULT_ISSUE_TYPES = ['task', 'bug'];
@@ -56,7 +63,23 @@ export async function findIssueSnapshot(
     [organizationId, issueKey]
   );
   const row = res.rows[0];
-  return row ? mapSnapshotRow(row) : null;
+  if (row) {
+    return mapSnapshotRow(row);
+  }
+  if (!isDbCompatibilityMode()) {
+    return null;
+  }
+  const payload = await findOverseerIssueByKey(issueKey);
+  if (!payload) {
+    return null;
+  }
+  return {
+    organization_id: organizationId,
+    issue_key: payload.key,
+    payload,
+    synced_at: new Date().toISOString(),
+    tracker_updated_at: payload.updatedAt ?? null,
+  };
 }
 
 export async function findIssueSnapshotsByKeys(
@@ -73,7 +96,18 @@ export async function findIssueSnapshotsByKeys(
      WHERE organization_id = $1 AND issue_key = ANY($2::text[])`,
     [organizationId, unique]
   );
-  return res.rows.map(mapSnapshotRow);
+  const rows = res.rows.map(mapSnapshotRow);
+  if (rows.length > 0 || !isDbCompatibilityMode()) {
+    return rows;
+  }
+  const payloads = await findOverseerIssuesByKeys(unique);
+  return payloads.map((payload) => ({
+    organization_id: organizationId,
+    issue_key: payload.key,
+    payload,
+    synced_at: new Date().toISOString(),
+    tracker_updated_at: payload.updatedAt ?? null,
+  }));
 }
 
 /** Получение статусов, типов и сводки задач из снимков PostgreSQL. */
@@ -191,10 +225,36 @@ export async function queryBacklogIssueSnapshots(
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
     listArgs
   );
+  const mapped = res.rows.map(mapSnapshotRow);
+  if (mapped.length > 0 || !isDbCompatibilityMode()) {
+    return {
+      rows: mapped,
+      totalCount,
+      totalPages,
+    };
+  }
+  const fallbackIssues = await queryOverseerIssuesByQueue(queueKey ?? '');
+  const filtered = fallbackIssues.filter((issue) =>
+    issuePayloadMatchesBacklogFilters(issue, {
+      excludeStatusKeys,
+      issueTypeKeys,
+      onlyWithoutSprint,
+      trackerQueueKey: queueKey,
+    })
+  );
+  const paged = filtered.slice(offset, offset + perPage);
+  const fallbackTotal = filtered.length;
+  const fallbackPages = fallbackTotal === 0 ? 0 : Math.ceil(fallbackTotal / perPage);
 
   return {
-    rows: res.rows.map(mapSnapshotRow),
-    totalCount,
-    totalPages,
+    rows: paged.map((payload) => ({
+      organization_id: organizationId,
+      issue_key: payload.key,
+      payload,
+      synced_at: new Date().toISOString(),
+      tracker_updated_at: payload.updatedAt ?? null,
+    })),
+    totalCount: fallbackTotal,
+    totalPages: fallbackPages,
   };
 }

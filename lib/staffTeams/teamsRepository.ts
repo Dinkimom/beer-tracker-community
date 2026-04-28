@@ -6,6 +6,8 @@ import type { TeamRow } from './types';
 import type { QueryParams } from '@/types';
 
 import { query } from '@/lib/db';
+import { canReadTeamsFromOverseer } from '@/lib/dbContract';
+import { isOnPremMode } from '@/lib/deploymentMode';
 
 export interface ListTeamsOptions {
   activeOnly?: boolean;
@@ -16,6 +18,27 @@ export async function listTeams(
   options: ListTeamsOptions = {}
 ): Promise<TeamRow[]> {
   const activeOnly = options.activeOnly === true;
+  if (canReadTeamsFromOverseer()) {
+    const overseerRes = await query<TeamRow>(
+      `SELECT
+          uid::text AS id,
+          $1::uuid AS organization_id,
+          slug,
+          title,
+          queue AS tracker_queue_key,
+          board::text AS tracker_board_id,
+          COALESCE(active, TRUE) AS active,
+          CURRENT_TIMESTAMP AS created_at,
+          CURRENT_TIMESTAMP AS updated_at
+       FROM overseer.teams
+       WHERE (NOT $2::boolean OR COALESCE(active, TRUE) = TRUE)
+       ORDER BY title ASC`,
+      [organizationId, activeOnly]
+    );
+    if (overseerRes.rows.length > 0) {
+      return overseerRes.rows;
+    }
+  }
   const res = await query<TeamRow>(
     `SELECT id, organization_id, slug, title, tracker_queue_key,
             tracker_board_id::text AS tracker_board_id,
@@ -33,6 +56,27 @@ export async function findTeamById(
   organizationId: string,
   teamId: string
 ): Promise<TeamRow | null> {
+  if (canReadTeamsFromOverseer()) {
+    const overseerRes = await query<TeamRow>(
+      `SELECT
+          uid::text AS id,
+          $1::uuid AS organization_id,
+          slug,
+          title,
+          queue AS tracker_queue_key,
+          board::text AS tracker_board_id,
+          COALESCE(active, TRUE) AS active,
+          CURRENT_TIMESTAMP AS created_at,
+          CURRENT_TIMESTAMP AS updated_at
+       FROM overseer.teams
+       WHERE uid::text = $2
+       LIMIT 1`,
+      [organizationId, teamId]
+    );
+    if (overseerRes.rows[0]) {
+      return overseerRes.rows[0];
+    }
+  }
   const res = await query<TeamRow>(
     `SELECT id, organization_id, slug, title, tracker_queue_key,
             tracker_board_id::text AS tracker_board_id,
@@ -51,13 +95,47 @@ export async function getTeamByBoardId(
   organizationId: string,
   boardId: number | string
 ): Promise<TeamRow | null> {
+  const onPrem = isOnPremMode();
+  if (canReadTeamsFromOverseer()) {
+    const overseerRes = await query<TeamRow>(
+      `SELECT
+          uid::text AS id,
+          $1::uuid AS organization_id,
+          slug,
+          title,
+          queue AS tracker_queue_key,
+          board::text AS tracker_board_id,
+          COALESCE(active, TRUE) AS active,
+          CURRENT_TIMESTAMP AS created_at,
+          CURRENT_TIMESTAMP AS updated_at
+       FROM overseer.teams
+       WHERE board = $2::bigint
+       LIMIT 1`,
+      [organizationId, String(boardId)]
+    );
+    if (overseerRes.rows[0]) {
+      return overseerRes.rows[0];
+    }
+  }
   const res = await query<TeamRow>(
-    `SELECT id, organization_id, slug, title, tracker_queue_key,
+    onPrem
+      ? `SELECT id,
+                NULL::uuid AS organization_id,
+                slug,
+                title,
+                tracker_queue_key,
+                tracker_board_id::text AS tracker_board_id,
+                active,
+                created_at,
+                updated_at
+         FROM teams
+         WHERE tracker_board_id = $1::bigint`
+      : `SELECT id, organization_id, slug, title, tracker_queue_key,
             tracker_board_id::text AS tracker_board_id,
             active, created_at, updated_at
-     FROM teams
-     WHERE organization_id = $1 AND tracker_board_id = $2::bigint`,
-    [organizationId, String(boardId)]
+         FROM teams
+         WHERE organization_id = $1 AND tracker_board_id = $2::bigint`,
+    onPrem ? [String(boardId)] : [organizationId, String(boardId)]
   );
   return res.rows[0] ?? null;
 }
@@ -145,7 +223,68 @@ export async function updateTeam(
                active, created_at, updated_at`,
     values
   );
-  return res.rows[0] ?? null;
+  if (res.rows[0]) {
+    return res.rows[0];
+  }
+
+  // Compatibility mode: team can exist only in overseer.* (read side).
+  // Create/refresh a local shadow row in beer_tracker.teams so admin updates can be persisted.
+  if (canReadTeamsFromOverseer()) {
+    const overseer = await query<TeamRow>(
+      `SELECT
+          uid::text AS id,
+          $1::uuid AS organization_id,
+          slug,
+          title,
+          queue AS tracker_queue_key,
+          board::text AS tracker_board_id,
+          COALESCE(active, TRUE) AS active,
+          CURRENT_TIMESTAMP AS created_at,
+          CURRENT_TIMESTAMP AS updated_at
+       FROM overseer.teams
+       WHERE uid::text = $2
+       LIMIT 1`,
+      [organizationId, teamId]
+    );
+    const base = overseer.rows[0];
+    if (!base) {
+      return null;
+    }
+    const fallback = await query<TeamRow>(
+      `INSERT INTO teams (id, organization_id, slug, title, tracker_queue_key, tracker_board_id, active)
+       VALUES (
+         $1::uuid,
+         $2::uuid,
+         $3,
+         $4,
+         $5,
+         $6::bigint,
+         $7
+       )
+       ON CONFLICT (id) DO UPDATE SET
+         slug = EXCLUDED.slug,
+         title = EXCLUDED.title,
+         tracker_queue_key = EXCLUDED.tracker_queue_key,
+         tracker_board_id = EXCLUDED.tracker_board_id,
+         active = EXCLUDED.active,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING id, organization_id, slug, title, tracker_queue_key,
+                 tracker_board_id::text AS tracker_board_id,
+                 active, created_at, updated_at`,
+      [
+        teamId,
+        organizationId,
+        patch.slug ?? base.slug,
+        patch.title ?? base.title,
+        patch.tracker_queue_key ?? base.tracker_queue_key,
+        String(patch.tracker_board_id ?? base.tracker_board_id),
+        patch.active ?? base.active,
+      ]
+    );
+    return fallback.rows[0] ?? null;
+  }
+
+  return null;
 }
 
 export async function deleteTeam(

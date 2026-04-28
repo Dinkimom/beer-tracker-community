@@ -144,8 +144,8 @@ export async function POST(request: Request) {
       }
       const orgResult = await client.query<{ id: string }>(
         qualifyBeerTrackerTables(
-          `INSERT INTO organizations (name, slug, tracker_api_base_url, tracker_org_id, settings)
-           VALUES ($1, $2, 'https://api.tracker.yandex.net/v3', '', $3::jsonb)
+          `INSERT INTO organizations (name, slug, tracker_org_id, settings)
+           VALUES ($1, $2, '', $3::jsonb)
            RETURNING id`
         ),
         [orgName, slug, JSON.stringify(settings)]
@@ -156,10 +156,11 @@ export async function POST(request: Request) {
       }
       await client.query(
         qualifyBeerTrackerTables(
-          `INSERT INTO organization_members (organization_id, user_id, role)
-           VALUES ($1, $2, 'org_admin')`
+          `UPDATE users
+           SET is_super_admin = TRUE
+           WHERE id = $1`
         ),
-        [organizationId, user.id]
+        [user.id]
       );
       await client.query('COMMIT');
       const res = NextResponse.json({

@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import { requireTenantOrgAdmin } from '@/lib/api-tenant';
 import { findOrganizationMembership } from '@/lib/organizations/organizationMembersRepository';
-import { updateUserTeamMembershipRole } from '@/lib/organizations/userTeamMembershipRepository';
 import { findTeamById } from '@/lib/staffTeams';
 
 const UuidSchema = z.string().uuid();
@@ -15,7 +14,7 @@ const PatchBodySchema = z.object({
 
 /**
  * PATCH /api/admin/organizations/[organizationId]/teams/[teamId]/product-role
- * org_admin: сменить роль пользователя в команде (user_team_memberships / планер).
+ * Team-level ACL теперь вычисляется из external master БД (overseer.*), не редактируется в приложении.
  */
 export async function PATCH(
   request: Request,
@@ -59,13 +58,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Пользователь не состоит в организации' }, { status: 404 });
   }
 
-  const updated = await updateUserTeamMembershipRole(orgId, teamId, userId, team_role);
-  if (!updated) {
-    return NextResponse.json(
-      { error: 'У пользователя нет доступа к этой команде в планере' },
-      { status: 404 }
-    );
+  if (team_role) {
+    // Role writes are intentionally blocked in this mode.
   }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(
+    { error: 'Роль команды управляется во внешней master БД (overseer.*)' },
+    { status: 409 }
+  );
 }

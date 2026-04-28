@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 
 /**
  * GET /api/sprints/batch/links?sprintIds=1,2,3
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { searchParams } = new URL(request.url);
     const sprintIdsStr = searchParams.get('sprintIds');
@@ -41,9 +43,9 @@ export async function GET(request: NextRequest) {
         to_anchor,
         created_at
       FROM task_links 
-      WHERE organization_id = $1 AND sprint_id = ANY($2::int[])
+      WHERE ${onPrem ? 'sprint_id = ANY($1::int[])' : 'organization_id = $1 AND sprint_id = ANY($2::int[])'}
       ORDER BY sprint_id, created_at`,
-      [organizationId, sprintIds]
+      onPrem ? [sprintIds] : [organizationId, sprintIds]
     );
 
     const bySprint: Record<number, typeof result.rows> = {};

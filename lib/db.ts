@@ -22,9 +22,6 @@ function createPool() {
     min: parseInt(process.env.DB_POOL_MIN || '2', 10),
     idleTimeoutMillis: parseInt(process.env.DB_POOL_TIMEOUT || '30000', 10),
     statement_timeout: 10_000,
-    // В окружениях с pgbouncer (transaction pooling) prepared statements могут ломаться:
-    // `prepared statement "... " does not exist`. Simple protocol избегает этого класса ошибок.
-    queryMode: 'simple' as unknown as never,
   } as never);
 }
 
@@ -47,7 +44,6 @@ const BEER_TRACKER_TABLES = [
   'issue_snapshots',
   'occupancy_task_order',
   'organization_invitations',
-  'organization_members',
   'organization_secrets',
   'organizations',
   'org_roles',
@@ -65,7 +61,6 @@ const BEER_TRACKER_TABLES = [
   'task_positions',
   'team_members',
   'teams',
-  'user_team_memberships',
   'users',
   'vacations',
 ] as const;
@@ -92,5 +87,16 @@ export async function query<T extends QueryResultRow = any>( // eslint-disable-l
   text: string,
   params?: QueryParams
 ): Promise<QueryResult<T>> {
-  return await pool.query<T>(qualifyBeerTrackerTables(text), params);
+  const sql = qualifyBeerTrackerTables(text);
+  try {
+    return await pool.query<T>(sql, params);
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    // pgbouncer/transaction-pooling can occasionally drop prepared statements on server side.
+    // Retry once: pg driver will recreate statement metadata on the new roundtrip.
+    if (message.includes('prepared statement') && message.includes('does not exist')) {
+      return await pool.query<T>(sql, params);
+    }
+    throw error;
+  }
 }

@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { CustomSelect, type CustomSelectOption } from "@/components/CustomSelect";
 import { Icon } from "@/components/Icon";
-import { adminListRow, adminTeamRosterGrid, field, muted } from "@/features/admin/adminUiTokens";
 import { useI18n } from "@/contexts/LanguageContext";
+import { adminListRow, adminTeamRosterGrid, field, muted } from "@/features/admin/adminUiTokens";
 
 type ProductPlannerTeamRole = "team_lead" | "team_member";
 
@@ -54,10 +54,7 @@ export function AdminTeamMemberRow({
     [t],
   );
 
-  const canSendInvite =
-    !m.product_user_in_org &&
-    Boolean(m.staff_email?.trim()) &&
-    !m.pending_product_invitation;
+  const canSendInvite = false;
 
   const showPlannerHint = m.product_user_in_org && !m.product_team_access;
 

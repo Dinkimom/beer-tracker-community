@@ -4,7 +4,7 @@
 
 import type { TeamMemberRow, TeamMemberWithStaffRow } from './types';
 
-import { pool, qualifyBeerTrackerTables, query } from '@/lib/db';
+import { pool, query } from '@/lib/db';
 
 export async function listTeamMembersWithStaff(
   organizationId: string,
@@ -18,35 +18,40 @@ export async function listTeamMembersWithStaff(
             (
               SELECT u.id
               FROM users u
-              INNER JOIN organization_members om
-                ON om.user_id = u.id AND om.organization_id = $1
               WHERE s.email IS NOT NULL AND u.email = s.email
               LIMIT 1
             ) AS product_user_id,
             (
-              SELECT utm.is_team_lead
-              FROM user_team_memberships utm
-              INNER JOIN users u ON u.id = utm.user_id
-              INNER JOIN organization_members om
-                ON om.user_id = u.id AND om.organization_id = $1
-              WHERE utm.team_id = tm.team_id
-                AND s.email IS NOT NULL
-                AND u.email = s.email
+              SELECT EXISTS (
+                SELECT 1
+                FROM public.registry_employees re
+                INNER JOIN overseer.staff_roles sr ON sr.staff_uid = re.uuid
+                INNER JOIN overseer.roles r ON r.uid = sr.role_uid
+                WHERE s.email IS NOT NULL
+                  AND re.email IS NOT NULL
+                  AND LOWER(TRIM(re.email)) = LOWER(TRIM(s.email))
+                  AND COALESCE(r.active, TRUE) = TRUE
+                  AND (
+                    LOWER(COALESCE(r.slug, '')) LIKE '%lead%'
+                    OR LOWER(COALESCE(r.title, '')) LIKE '%lead%'
+                    OR LOWER(COALESCE(r.slug, '')) LIKE '%рук%'
+                    OR LOWER(COALESCE(r.title, '')) LIKE '%рук%'
+                  )
+              )
               LIMIT 1
             ) AS product_planner_is_team_lead,
             (s.email IS NOT NULL AND EXISTS (
                SELECT 1
-               FROM organization_members om
-               INNER JOIN users u ON u.id = om.user_id
-               WHERE om.organization_id = $1 AND u.email = s.email
+               FROM users u
+               WHERE LOWER(TRIM(u.email)) = LOWER(TRIM(s.email))
              )) AS product_user_in_org,
             (s.email IS NOT NULL AND EXISTS (
                SELECT 1
-               FROM organization_members om
-               INNER JOIN users u ON u.id = om.user_id
-               INNER JOIN user_team_memberships utm
-                 ON utm.user_id = u.id AND utm.team_id = tm.team_id
-               WHERE om.organization_id = $1 AND u.email = s.email
+               FROM public.registry_employees re
+               INNER JOIN overseer.staff_teams st ON st.staff_uid = re.uuid
+               WHERE re.email IS NOT NULL
+                 AND LOWER(TRIM(re.email)) = LOWER(TRIM(s.email))
+                 AND st.team_uid::text = tm.team_id::text
              )) AS product_team_access,
             (s.email IS NOT NULL AND EXISTS (
                SELECT 1
@@ -105,6 +110,18 @@ export async function addTeamMember(
   return res.rows[0] ?? null;
 }
 
+/** Добавляет участника в команду в master-контракте (overseer.staff_teams). */
+export async function addOverseerTeamMember(teamId: string, staffUid: string): Promise<boolean> {
+  const res = await query<{ ok: number }>(
+    `INSERT INTO overseer.staff_teams (team_uid, staff_uid)
+     VALUES ($1::uuid, $2::uuid)
+     ON CONFLICT DO NOTHING
+     RETURNING 1 AS ok`,
+    [teamId, staffUid]
+  );
+  return Boolean(res.rows[0]);
+}
+
 export async function updateTeamMemberRole(
   organizationId: string,
   teamId: string,
@@ -126,53 +143,30 @@ export async function updateTeamMemberRole(
 }
 
 /**
- * Удаляет участника из `team_members` и снимает права планера в этой команде:
- * строка `user_team_memberships` для пользователя с тем же email, что у staff (иначе списки и ACL расходятся).
+ * Удаляет участника из `team_members`.
  */
 export async function removeTeamMember(
   organizationId: string,
   teamId: string,
   staffId: string
 ): Promise<boolean> {
+  if (organizationId) {
+    // В текущем контракте состав команд хранится в overseer.staff_teams.
+    // organizationId оставляем в сигнатуре ради обратной совместимости вызовов.
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const delTm = await client.query(
-      qualifyBeerTrackerTables(
-        `DELETE FROM team_members
-         WHERE team_id = $2::uuid
-           AND staff_id = $3::uuid
-           AND EXISTS (
-             SELECT 1 FROM teams
-             WHERE teams.id = team_members.team_id
-               AND teams.organization_id = $1
-           )`
-      ),
-      [organizationId, teamId, staffId]
+      `DELETE FROM overseer.staff_teams
+       WHERE team_uid = $1::uuid
+         AND staff_uid = $2::uuid`,
+      [teamId, staffId]
     );
     if ((delTm.rowCount ?? 0) === 0) {
       await client.query('ROLLBACK');
       return false;
     }
-    await client.query(
-      qualifyBeerTrackerTables(
-        `DELETE FROM user_team_memberships utm
-         WHERE utm.team_id = $2::uuid
-           AND EXISTS (
-             SELECT 1
-             FROM staff s
-             INNER JOIN users u
-               ON s.email IS NOT NULL
-              AND LOWER(TRIM(BOTH FROM s.email::text)) = LOWER(TRIM(BOTH FROM u.email::text))
-             INNER JOIN organization_members om
-               ON om.user_id = u.id AND om.organization_id = $1
-             WHERE s.id = $3::uuid
-               AND s.organization_id = $1
-               AND utm.user_id = u.id
-           )`
-      ),
-      [organizationId, teamId, staffId]
-    );
     await client.query('COMMIT');
     return true;
   } catch (e) {

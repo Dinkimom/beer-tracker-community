@@ -4,7 +4,7 @@
 
 import type { SyncJobMode } from './types';
 
-import { getSyncPlatformEnv } from '@/lib/env';
+import { getSyncPlatformEnv, getTrackerConfig } from '@/lib/env';
 import {
   findOrganizationById,
   getDecryptedOrganizationTrackerToken,
@@ -110,8 +110,9 @@ export async function runOrgSync(input: RunOrgSyncInput): Promise<RunOrgSyncResu
 
   try {
     await input.onProgress?.(10);
+    const trackerApiUrl = getTrackerConfig().apiUrl || undefined;
     const api = createTrackerAxiosInstance({
-      apiUrl: org.tracker_api_base_url?.trim() || undefined,
+      apiUrl: trackerApiUrl,
       oauthToken: token,
       orgId: org.tracker_org_id.trim(),
     });

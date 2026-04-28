@@ -12,7 +12,7 @@ export async function findOrganizationById(
   organizationId: string
 ): Promise<OrganizationRow | null> {
   const res = await query<OrganizationRow>(
-    `SELECT id, name, slug, tracker_api_base_url, tracker_org_id, settings,
+    `SELECT id, name, slug, tracker_org_id, settings,
             sync_next_run_at, initial_sync_completed_at, created_at, updated_at
      FROM organizations
      WHERE id = $1`,
@@ -32,7 +32,7 @@ export async function listOrganizationsDueForIncrementalSync(
     throw new Error('listOrganizationsDueForIncrementalSync: limit must be a positive integer');
   }
   const res = await query<OrganizationRow>(
-    `SELECT id, name, slug, tracker_api_base_url, tracker_org_id, settings,
+    `SELECT id, name, slug, tracker_org_id, settings,
             sync_next_run_at, initial_sync_completed_at, created_at, updated_at
      FROM organizations
      WHERE initial_sync_completed_at IS NOT NULL
@@ -49,7 +49,7 @@ export async function findOrganizationBySlug(
   slug: string
 ): Promise<OrganizationRow | null> {
   const res = await query<OrganizationRow>(
-    `SELECT id, name, slug, tracker_api_base_url, tracker_org_id, settings,
+    `SELECT id, name, slug, tracker_org_id, settings,
             sync_next_run_at, initial_sync_completed_at, created_at, updated_at
      FROM organizations
      WHERE slug = $1`,
@@ -64,14 +64,12 @@ export interface UpdateOrganizationPatch {
   settings?: Record<string, unknown>;
   slug?: string | null;
   sync_next_run_at?: Date | null;
-  tracker_api_base_url?: string;
   tracker_org_id?: string;
 }
 
 const ORG_UPDATE_COLUMNS: (keyof UpdateOrganizationPatch)[] = [
   'name',
   'slug',
-  'tracker_api_base_url',
   'tracker_org_id',
   'settings',
   'sync_next_run_at',
@@ -103,7 +101,7 @@ export async function updateOrganization(
     `UPDATE organizations
      SET ${assignments.join(', ')}, updated_at = CURRENT_TIMESTAMP
      WHERE id = $1
-     RETURNING id, name, slug, tracker_api_base_url, tracker_org_id, settings,
+     RETURNING id, name, slug, tracker_org_id, settings,
                sync_next_run_at, initial_sync_completed_at, created_at, updated_at`,
     values
   );
@@ -114,7 +112,6 @@ export interface InsertOrganizationInput {
   name: string;
   settings?: Record<string, unknown>;
   slug?: string | null;
-  tracker_api_base_url?: string;
   tracker_org_id?: string;
 }
 
@@ -122,14 +119,13 @@ export async function insertOrganization(
   input: InsertOrganizationInput
 ): Promise<OrganizationRow> {
   const res = await query<OrganizationRow>(
-    `INSERT INTO organizations (name, slug, tracker_api_base_url, tracker_org_id, settings)
-     VALUES ($1, $2, COALESCE($3, 'https://api.tracker.yandex.net/v3'), COALESCE($4, ''), COALESCE($5, '{}'::jsonb))
-     RETURNING id, name, slug, tracker_api_base_url, tracker_org_id, settings,
+    `INSERT INTO organizations (name, slug, tracker_org_id, settings)
+     VALUES ($1, $2, COALESCE($3, ''), COALESCE($4, '{}'::jsonb))
+     RETURNING id, name, slug, tracker_org_id, settings,
                sync_next_run_at, initial_sync_completed_at, created_at, updated_at`,
     [
       input.name,
       input.slug ?? null,
-      input.tracker_api_base_url ?? null,
       input.tracker_org_id ?? null,
       input.settings ?? null,
     ]

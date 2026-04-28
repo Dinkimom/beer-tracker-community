@@ -24,6 +24,7 @@ export {
 export type {
   OrganizationMemberDirectoryRow,
   OrganizationMemberDirectoryTeam,
+  RegistryEmployeeDirectoryRow,
 } from './organizationMembersRepository';
 export {
   countOrganizationMembersByRole,
@@ -32,7 +33,9 @@ export {
   findOrganizationMembership,
   insertOrganizationMember,
   listOrganizationMemberDirectory,
+  listRegistryEmployeesDirectory,
   listOrganizationMembers,
+  listOrganizationTeamsWithMembersFromOverseer,
   listUserOrganizations,
   parseMemberDirectoryTeamsJson,
   updateOrganizationMemberRole,

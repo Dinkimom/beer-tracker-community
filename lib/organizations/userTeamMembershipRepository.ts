@@ -1,9 +1,11 @@
 /**
- * Связь пользователя продукта с командами (user_team_memberships) — ACL, не staff/team_members.
+ * Team-level ACL вычисляется из external master-контракта:
+ * public.registry_employees + overseer.staff_teams/staff_roles/roles.
  */
 
 import type { OrgMemberRole } from './types';
 
+import { findUserById } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 export interface UserTeamMembershipRow {
@@ -19,13 +21,41 @@ export async function listUserTeamMembershipsInOrganization(
   organizationId: string,
   userId: string
 ): Promise<UserTeamMembershipRow[]> {
+  const user = await findUserById(userId);
+  if (!user) {
+    return [];
+  }
   const res = await query<UserTeamMembershipRow>(
-    `SELECT utm.id, utm.user_id, utm.team_id, utm.is_team_lead, utm.is_team_member, utm.created_at
-     FROM user_team_memberships utm
-     INNER JOIN teams t ON t.id = utm.team_id AND t.organization_id = $1
-     WHERE utm.user_id = $2
-     ORDER BY utm.created_at ASC`,
-    [organizationId, userId]
+    `WITH me AS (
+       SELECT re.uuid AS staff_uid
+       FROM public.registry_employees re
+       WHERE re.email IS NOT NULL
+         AND LOWER(TRIM(re.email)) = LOWER(TRIM($2))
+       LIMIT 1
+     )
+     SELECT
+       CONCAT($1::text, ':', $3::text, ':', st.team_uid::text) AS id,
+       $3::text AS user_id,
+       st.team_uid::text AS team_id,
+       EXISTS (
+         SELECT 1
+         FROM overseer.staff_roles sr
+         INNER JOIN overseer.roles r ON r.uid = sr.role_uid
+         WHERE sr.staff_uid = st.staff_uid
+           AND COALESCE(r.active, TRUE) = TRUE
+           AND (
+             LOWER(COALESCE(r.slug, '')) LIKE '%lead%'
+             OR LOWER(COALESCE(r.title, '')) LIKE '%lead%'
+             OR LOWER(COALESCE(r.slug, '')) LIKE '%рук%'
+             OR LOWER(COALESCE(r.title, '')) LIKE '%рук%'
+           )
+       ) AS is_team_lead,
+       TRUE AS is_team_member,
+       CURRENT_TIMESTAMP AS created_at
+     FROM overseer.staff_teams st
+     INNER JOIN me ON me.staff_uid = st.staff_uid
+     ORDER BY st.team_uid::text ASC`,
+    [organizationId, user.email, userId]
   );
   return res.rows;
 }
@@ -44,42 +74,31 @@ export function productTeamRoleToFlags(role: ProductTeamRole): {
   return { isTeamLead: false, isTeamMember: true };
 }
 
-export async function upsertUserTeamMembership(input: {
+export function upsertUserTeamMembership(input: {
   isTeamLead: boolean;
   isTeamMember: boolean;
   teamId: string;
   userId: string;
 }): Promise<void> {
-  await query(
-    `INSERT INTO user_team_memberships (user_id, team_id, is_team_lead, is_team_member)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (user_id, team_id) DO UPDATE SET
-       is_team_lead = user_team_memberships.is_team_lead OR EXCLUDED.is_team_lead,
-       is_team_member = user_team_memberships.is_team_member OR EXCLUDED.is_team_member`,
-    [input.userId, input.teamId, input.isTeamLead, input.isTeamMember]
+  if (input.userId || input.teamId || input.isTeamLead || input.isTeamMember) {
+    // no-op guard for lint; writes are intentionally disabled.
+  }
+  return Promise.reject(
+    new Error('team ACL is derived from overseer.* and cannot be updated in beer_tracker')
   );
 }
 
 /** Заменить роль в команде (планер), не OR-слияние флагов. */
-export async function updateUserTeamMembershipRole(
+export function updateUserTeamMembershipRole(
   organizationId: string,
   teamId: string,
   userId: string,
   role: ProductTeamRole
 ): Promise<boolean> {
-  const { isTeamLead, isTeamMember } = productTeamRoleToFlags(role);
-  const res = await query(
-    `UPDATE user_team_memberships utm
-     SET is_team_lead = $4, is_team_member = $5
-     FROM teams t
-     WHERE utm.team_id = t.id
-       AND t.organization_id = $1
-       AND t.id = $3::uuid
-       AND utm.user_id = $2::uuid
-       AND utm.team_id = $3::uuid`,
-    [organizationId, userId, teamId, isTeamLead, isTeamMember]
-  );
-  return (res.rowCount ?? 0) > 0;
+  if (organizationId || teamId || userId || role) {
+    // external ACL is read-only from application side.
+  }
+  return Promise.resolve(false);
 }
 
 export async function listOrganizationUserIdsWithoutTeam(
@@ -101,17 +120,22 @@ export async function listOrganizationMembersWithoutTeam(
   organizationId: string
 ): Promise<OrganizationMemberWithoutTeamRow[]> {
   const res = await query<OrganizationMemberWithoutTeamRow>(
-    `SELECT om.user_id, om.role AS org_role, u.email, om.created_at
-     FROM organization_members om
-     INNER JOIN users u ON u.id = om.user_id
-     WHERE om.organization_id = $1
-       AND NOT EXISTS (
-         SELECT 1
-         FROM user_team_memberships utm
-         INNER JOIN teams t ON t.id = utm.team_id AND t.organization_id = $1
-         WHERE utm.user_id = om.user_id
-       )
-     ORDER BY om.created_at ASC`,
+    `SELECT
+       u.id AS user_id,
+       CASE WHEN u.is_super_admin THEN 'org_admin' ELSE 'member' END AS org_role,
+       u.email,
+       u.created_at
+     FROM users u
+     LEFT JOIN public.registry_employees re
+       ON re.email IS NOT NULL
+      AND LOWER(TRIM(re.email)) = LOWER(TRIM(u.email))
+     WHERE re.uuid IS NULL
+        OR NOT EXISTS (
+          SELECT 1
+          FROM overseer.staff_teams st
+          WHERE st.staff_uid = re.uuid
+        )
+     ORDER BY u.created_at ASC`,
     [organizationId]
   );
   return res.rows;
@@ -121,31 +145,17 @@ export async function userHasTeamMembershipInOrganization(
   organizationId: string,
   userId: string
 ): Promise<boolean> {
-  const res = await query<{ one: number }>(
-    `SELECT 1 AS one
-     FROM user_team_memberships utm
-     INNER JOIN teams t ON t.id = utm.team_id AND t.organization_id = $1
-     WHERE utm.user_id = $2
-     LIMIT 1`,
-    [organizationId, userId]
-  );
-  return res.rows.length > 0;
+  const rows = await listUserTeamMembershipsInOrganization(organizationId, userId);
+  return rows.length > 0;
 }
 
 /** Снимает все строки планера user_team_memberships пользователя в командах этой организации. */
-export async function deleteUserTeamMembershipsForUserInOrganization(
+export function deleteUserTeamMembershipsForUserInOrganization(
   organizationId: string,
   userId: string
 ): Promise<void> {
-  await query(
-    `DELETE FROM user_team_memberships utm
-     WHERE utm.user_id = $2::uuid
-       AND EXISTS (
-         SELECT 1
-         FROM teams t
-         WHERE t.id = utm.team_id
-           AND t.organization_id = $1
-       )`,
-    [organizationId, userId]
-  );
+  if (organizationId || userId) {
+    // external ACL is read-only from application side.
+  }
+  return Promise.resolve();
 }

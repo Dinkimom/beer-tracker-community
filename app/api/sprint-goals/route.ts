@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireTenantContext } from '@/lib/api-tenant';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 
 /** GET: список целей по sprintId, goalType */
 export async function GET(request: NextRequest) {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { searchParams } = new URL(request.url);
     const sprintIdStr = searchParams.get('sprintId');
@@ -28,9 +30,9 @@ export async function GET(request: NextRequest) {
     const result = await query(
       `SELECT id, text, done
        FROM sprint_goals
-       WHERE organization_id = $1 AND sprint_id = $2 AND goal_type = $3
+       WHERE ${onPrem ? 'sprint_id = $1 AND goal_type = $2' : 'organization_id = $1 AND sprint_id = $2 AND goal_type = $3'}
        ORDER BY created_at ASC`,
-      [organizationId, sprintId, goalType]
+      onPrem ? [sprintId, goalType] : [organizationId, sprintId, goalType]
     );
 
     const checklistItems = result.rows.map((row: { id: string; text: string; done: boolean }) => ({
@@ -65,6 +67,7 @@ export async function POST(request: NextRequest) {
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const body = await request.json();
     const { sprintId, goalType, text, team } = body as {
@@ -88,10 +91,16 @@ export async function POST(request: NextRequest) {
     }
 
     const insert = await query(
-      `INSERT INTO sprint_goals (organization_id, sprint_id, team, text, goal_type, done)
-       VALUES ($1, $2, $3, $4, $5, false)
-       RETURNING id, text, done`,
-      [organizationId, sprintId, team ?? null, text.trim(), goalType]
+      onPrem
+        ? `INSERT INTO sprint_goals (sprint_id, team, text, goal_type, done)
+           VALUES ($1, $2, $3, $4, false)
+           RETURNING id, text, done`
+        : `INSERT INTO sprint_goals (organization_id, sprint_id, team, text, goal_type, done)
+           VALUES ($1, $2, $3, $4, $5, false)
+           RETURNING id, text, done`,
+      onPrem
+        ? [sprintId, team ?? null, text.trim(), goalType]
+        : [organizationId, sprintId, team ?? null, text.trim(), goalType]
     );
 
     const row = insert.rows[0] as { id: string; text: string; done: boolean };

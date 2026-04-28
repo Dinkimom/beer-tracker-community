@@ -5,6 +5,8 @@
 import type { TeamMember } from '@/types/team';
 
 import { query } from '@/lib/db';
+import { canReadRegistryFromPublicSchema } from '@/lib/dbContract';
+import { isOnPremMode } from '@/lib/deploymentMode';
 
 import { getTeamByBoardId } from './teamsRepository';
 
@@ -15,6 +17,19 @@ export interface StaffRegistryItem {
   displayName: string;
   email?: string | null;
   trackerId: string;
+}
+
+interface PublicRegistryRow {
+  avatar_link: string | null;
+  birthdate: Date | string | null;
+  first_name: string | null;
+  last_name: string | null;
+  middle_name: string | null;
+  name: string | null;
+  patronymic: string | null;
+  surname: string | null;
+  tracker_id: string | null;
+  uuid: string;
 }
 
 function manualFlagString(
@@ -46,6 +61,33 @@ function splitDisplayName(displayName: string): { firstName: string; lastName: s
   };
 }
 
+function displayNameFromPublicRegistry(row: PublicRegistryRow): string {
+  const last = row.last_name ?? row.surname ?? '';
+  const first = row.first_name ?? row.name ?? '';
+  const middle = row.middle_name ?? row.patronymic ?? '';
+  const parts = [last, first, middle]
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.join(' ').trim();
+}
+
+function normalizeBirthdate(value: Date | string | null): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') return value;
+  return value.toISOString().slice(0, 10);
+}
+
+function publicRegistryToItem(row: PublicRegistryRow): StaffRegistryItem {
+  const displayName = displayNameFromPublicRegistry(row);
+  return {
+    trackerId: (row.tracker_id ?? row.uuid).trim() || row.uuid,
+    displayName: displayName || row.uuid,
+    avatarUrl: row.avatar_link ?? null,
+    birthdate: normalizeBirthdate(row.birthdate),
+    email: null,
+  };
+}
+
 function staffRowToRegistryItem(row: {
   display_name: string;
   email: string | null;
@@ -67,6 +109,7 @@ function staffRowToRegistryItem(row: {
 
 interface TeamMemberQueryRow {
   role_slug: string | null;
+  staff_avatar_url: string | null;
   staff_display_name: string;
   staff_email: string | null;
   staff_id: string;
@@ -96,7 +139,7 @@ function mapTeamMemberRow(row: TeamMemberQueryRow): TeamMember {
     middleName: undefined,
     email,
     displayName: row.staff_display_name,
-    avatarUrl: manualFlagString(flags, 'avatarUrl'),
+    avatarUrl: row.staff_avatar_url ?? manualFlagString(flags, 'avatarUrl'),
     team: {
       uid: row.team_id,
       slug: row.team_slug,
@@ -118,13 +161,72 @@ export async function fetchTeamMembersByBoardIdForOrg(
   organizationId: string,
   boardId: number
 ): Promise<TeamMember[]> {
+  const onPrem = isOnPremMode();
   const team = await getTeamByBoardId(organizationId, boardId);
   if (!team) {
     return [];
   }
 
+  if (onPrem) {
+    const overseerRes = await query<TeamMemberQueryRow>(
+      `SELECT
+          role_pick.slug AS role_slug,
+          COALESCE(re.uuid::text, re.id::text) AS staff_id,
+          COALESCE(
+            NULLIF(TRIM(re.fullname), ''),
+            NULLIF(TRIM(CONCAT_WS(' ', re.surname, re.name, re.patronymic)), ''),
+            COALESCE(re.uuid::text, re.id::text)
+          ) AS staff_display_name,
+          re.email AS staff_email,
+          re.avatar_link AS staff_avatar_url,
+          NULLIF(TRIM(re.tracker_id::text), '') AS staff_tracker_user_id,
+          NULL::jsonb AS staff_manual_override_flags,
+          t.uid::text AS team_id,
+          t.slug AS team_slug,
+          t.title AS team_title,
+          t.queue AS team_tracker_queue_key,
+          t.board::text AS team_tracker_board_id,
+          COALESCE(t.active, TRUE) AS team_active
+       FROM overseer.teams t
+       INNER JOIN overseer.staff_teams st ON st.team_uid = t.uid
+       INNER JOIN public.registry_employees re ON re.uuid = st.staff_uid
+       LEFT JOIN LATERAL (
+         SELECT r.slug
+         FROM overseer.staff_roles sr
+         INNER JOIN overseer.roles r ON r.uid = sr.role_uid
+         WHERE sr.staff_uid = st.staff_uid
+           AND COALESCE(r.active, TRUE) = TRUE
+         ORDER BY r.slug ASC
+         LIMIT 1
+       ) role_pick ON TRUE
+       WHERE t.uid::text = $1
+       ORDER BY staff_display_name ASC`,
+      [team.id]
+    );
+    return overseerRes.rows.map(mapTeamMemberRow);
+  }
+
   const res = await query<TeamMemberQueryRow>(
-    `SELECT tm.role_slug,
+    onPrem
+      ? `SELECT tm.role_slug,
+            s.id AS staff_id,
+            s.display_name AS staff_display_name,
+            s.email AS staff_email,
+            NULL::text AS staff_avatar_url,
+            s.tracker_user_id AS staff_tracker_user_id,
+            s.manual_override_flags AS staff_manual_override_flags,
+            t.id AS team_id,
+            t.slug AS team_slug,
+            t.title AS team_title,
+            t.tracker_queue_key AS team_tracker_queue_key,
+            t.tracker_board_id::text AS team_tracker_board_id,
+            t.active AS team_active
+       FROM team_members tm
+       INNER JOIN teams t ON t.id = tm.team_id
+       INNER JOIN staff s ON s.id = tm.staff_id
+       WHERE tm.team_id = $1::uuid
+       ORDER BY s.display_name ASC`
+      : `SELECT tm.role_slug,
             s.id AS staff_id,
             s.display_name AS staff_display_name,
             s.email AS staff_email,
@@ -141,7 +243,7 @@ export async function fetchTeamMembersByBoardIdForOrg(
      INNER JOIN staff s ON s.id = tm.staff_id AND s.organization_id = $1
      WHERE tm.team_id = $2::uuid
      ORDER BY s.display_name ASC`,
-    [organizationId, team.id]
+    onPrem ? [team.id] : [organizationId, team.id]
   );
 
   return res.rows.map(mapTeamMemberRow);
@@ -153,11 +255,51 @@ export async function fetchTeamMembersByBoardIdForOrg(
 export async function fetchAllTeamMembersForOrg(
   organizationId: string
 ): Promise<TeamMember[]> {
+  const onPrem = isOnPremMode();
+  if (onPrem) {
+    const overseerRes = await query<TeamMemberQueryRow>(
+      `SELECT
+          role_pick.slug AS role_slug,
+          COALESCE(re.uuid::text, re.id::text) AS staff_id,
+          COALESCE(
+            NULLIF(TRIM(re.fullname), ''),
+            NULLIF(TRIM(CONCAT_WS(' ', re.surname, re.name, re.patronymic)), ''),
+            COALESCE(re.uuid::text, re.id::text)
+          ) AS staff_display_name,
+          re.email AS staff_email,
+          re.avatar_link AS staff_avatar_url,
+          NULLIF(TRIM(re.tracker_id::text), '') AS staff_tracker_user_id,
+          NULL::jsonb AS staff_manual_override_flags,
+          t.uid::text AS team_id,
+          t.slug AS team_slug,
+          t.title AS team_title,
+          t.queue AS team_tracker_queue_key,
+          t.board::text AS team_tracker_board_id,
+          COALESCE(t.active, TRUE) AS team_active
+       FROM overseer.teams t
+       INNER JOIN overseer.staff_teams st ON st.team_uid = t.uid
+       INNER JOIN public.registry_employees re ON re.uuid = st.staff_uid
+       LEFT JOIN LATERAL (
+         SELECT r.slug
+         FROM overseer.staff_roles sr
+         INNER JOIN overseer.roles r ON r.uid = sr.role_uid
+         WHERE sr.staff_uid = st.staff_uid
+           AND COALESCE(r.active, TRUE) = TRUE
+         ORDER BY r.slug ASC
+         LIMIT 1
+       ) role_pick ON TRUE
+       WHERE COALESCE(t.active, TRUE) = TRUE
+       ORDER BY staff_display_name ASC`
+    );
+    return overseerRes.rows.map(mapTeamMemberRow);
+  }
+
   const res = await query<TeamMemberQueryRow>(
     `SELECT tm.role_slug,
             s.id AS staff_id,
             s.display_name AS staff_display_name,
             s.email AS staff_email,
+            NULL::text AS staff_avatar_url,
             s.tracker_user_id AS staff_tracker_user_id,
             s.manual_override_flags AS staff_manual_override_flags,
             t.id AS team_id,
@@ -189,6 +331,34 @@ export async function searchStaffInOrg(
     return [];
   }
   const pattern = `%${q.replace(/%/g, '\\%')}%`;
+  if (canReadRegistryFromPublicSchema()) {
+    const registryRes = await query<PublicRegistryRow>(
+      `SELECT
+          uuid,
+          tracker_id,
+          name,
+          surname,
+          patronymic,
+          NULL::text AS first_name,
+          NULL::text AS last_name,
+          NULL::text AS middle_name,
+          avatar_link,
+          birthdate
+       FROM public.registry_employees
+       WHERE (
+         coalesce(surname, '') ILIKE $1
+         OR coalesce(name, '') ILIKE $1
+         OR coalesce(patronymic, '') ILIKE $1
+         OR coalesce(fullname, '') ILIKE $1
+       )
+       ORDER BY surname ASC NULLS LAST, name ASC NULLS LAST
+       LIMIT 30`,
+      [pattern]
+    );
+    if (registryRes.rows.length > 0) {
+      return registryRes.rows.map(publicRegistryToItem);
+    }
+  }
   const res = await query<{
     display_name: string;
     email: string | null;
@@ -207,7 +377,6 @@ export async function searchStaffInOrg(
      LIMIT 30`,
     [organizationId, pattern]
   );
-
   return res.rows
     .map(staffRowToRegistryItem)
     .filter((x): x is StaffRegistryItem => x !== null);
@@ -217,6 +386,29 @@ export async function getStaffByTrackerUserIdInOrg(
   organizationId: string,
   trackerUserId: string
 ): Promise<StaffRegistryItem | null> {
+  if (canReadRegistryFromPublicSchema()) {
+    const registryRes = await query<PublicRegistryRow>(
+      `SELECT
+          uuid,
+          tracker_id,
+          name,
+          surname,
+          patronymic,
+          NULL::text AS first_name,
+          NULL::text AS last_name,
+          NULL::text AS middle_name,
+          avatar_link,
+          birthdate
+       FROM public.registry_employees
+       WHERE tracker_id = $1 OR uuid::text = $1
+       LIMIT 1`,
+      [trackerUserId]
+    );
+    const registryRow = registryRes.rows[0];
+    if (registryRow) {
+      return publicRegistryToItem(registryRow);
+    }
+  }
   const res = await query<{
     display_name: string;
     email: string | null;
@@ -229,10 +421,7 @@ export async function getStaffByTrackerUserIdInOrg(
     [organizationId, trackerUserId]
   );
   const row = res.rows[0];
-  if (!row) {
-    return null;
-  }
-  return staffRowToRegistryItem(row);
+  return row ? staffRowToRegistryItem(row) : null;
 }
 
 export async function getStaffByTrackerUserIdsInOrg(
@@ -241,6 +430,27 @@ export async function getStaffByTrackerUserIdsInOrg(
 ): Promise<StaffRegistryItem[]> {
   if (trackerUserIds.length === 0) {
     return [];
+  }
+  if (canReadRegistryFromPublicSchema()) {
+    const registryRes = await query<PublicRegistryRow>(
+      `SELECT
+          uuid,
+          tracker_id,
+          name,
+          surname,
+          patronymic,
+          NULL::text AS first_name,
+          NULL::text AS last_name,
+          NULL::text AS middle_name,
+          avatar_link,
+          birthdate
+       FROM public.registry_employees
+       WHERE tracker_id = ANY($1::text[]) OR uuid::text = ANY($1::text[])`,
+      [trackerUserIds]
+    );
+    if (registryRes.rows.length > 0) {
+      return registryRes.rows.map(publicRegistryToItem);
+    }
   }
   const res = await query<{
     display_name: string;

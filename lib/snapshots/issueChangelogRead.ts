@@ -5,6 +5,8 @@
 import type { IssueChangelogWithComments } from '@/types/tracker';
 
 import { query } from '@/lib/db';
+import { isDbCompatibilityMode } from '@/lib/env';
+import { fetchIssueChangelogMapFromOverseer } from '@/lib/snapshots/overseerRawIssuesRead';
 
 interface ChangelogSelectRow {
   changelog: unknown;
@@ -34,6 +36,20 @@ export async function fetchIssueChangelogCacheMap(
     map.set(row.issue_key, {
       changelog: Array.isArray(row.changelog) ? row.changelog : [],
       comments: Array.isArray(row.comments) ? row.comments : [],
+    });
+  }
+  if (!isDbCompatibilityMode()) {
+    return map;
+  }
+  const missing = unique.filter((key) => !map.has(key));
+  if (missing.length === 0) {
+    return map;
+  }
+  const fallback = await fetchIssueChangelogMapFromOverseer(missing);
+  for (const [key, value] of fallback.entries()) {
+    map.set(key, {
+      changelog: value.changelog as IssueChangelogWithComments['changelog'],
+      comments: value.comments as IssueChangelogWithComments['comments'],
     });
   }
   return map;

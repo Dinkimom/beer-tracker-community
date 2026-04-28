@@ -4,6 +4,7 @@ import { TRACKER_UPSTREAM_FORWARD_STATUSES, handleApiError } from '@/lib/api-err
 import { requireTenantContext } from '@/lib/api-tenant';
 import { getTrackerApiFromRequest } from '@/lib/api-tracker';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 import { resolvePlannerAssigneeIdForTrackerSync } from '@/lib/staffTeams/resolvePlannerAssigneeForTrackerSync';
 import { updateIssueAssignee } from '@/lib/trackerApi';
@@ -21,6 +22,7 @@ export async function GET(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -33,7 +35,7 @@ export async function GET(
     }
 
     const result = await query(
-      `SELECT 
+      `SELECT
         task_id,
         assignee_id,
         start_day,
@@ -43,10 +45,10 @@ export async function GET(
         planned_start_part,
         planned_duration,
         is_qa
-      FROM task_positions 
-      WHERE organization_id = $1 AND sprint_id = $2
+      FROM task_positions
+      WHERE ${onPrem ? 'sprint_id = $1' : 'organization_id = $1 AND sprint_id = $2'}
       ORDER BY assignee_id, start_day, start_part`,
-      [organizationId, sprintId]
+      onPrem ? [sprintId] : [organizationId, sprintId]
     );
 
     const positions = result.rows as Array<Record<string, unknown> & { task_id: string }>;
@@ -55,9 +57,9 @@ export async function GET(
       const segmentsResult = await query(
         `SELECT task_id, segment_index, start_day, start_part, duration
          FROM task_position_segments
-         WHERE organization_id = $1 AND sprint_id = $2
+         WHERE ${onPrem ? 'sprint_id = $1' : 'organization_id = $1 AND sprint_id = $2'}
          ORDER BY task_id, segment_index`,
-        [organizationId, sprintId]
+        onPrem ? [sprintId] : [organizationId, sprintId]
       );
       const segmentsByTask = new Map<string, Array<{ segment_index: number; start_day: number; start_part: number; duration: number }>>();
       for (const row of segmentsResult.rows as Array<{ task_id: string; segment_index: number; start_day: number; start_part: number; duration: number }>) {
@@ -91,6 +93,7 @@ export async function POST(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -132,44 +135,75 @@ export async function POST(
     } = validation.data;
 
     const result = await query(
-      `INSERT INTO task_positions (
-        organization_id, sprint_id, task_id, assignee_id, start_day, start_part, duration,
-        planned_start_day, planned_start_part, planned_duration, is_qa
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (organization_id, sprint_id, task_id)
-      DO UPDATE SET
-        assignee_id = EXCLUDED.assignee_id,
-        start_day = EXCLUDED.start_day,
-        start_part = EXCLUDED.start_part,
-        duration = EXCLUDED.duration,
-        planned_start_day = EXCLUDED.planned_start_day,
-        planned_start_part = EXCLUDED.planned_start_part,
-        planned_duration = EXCLUDED.planned_duration,
-        is_qa = EXCLUDED.is_qa,
-        updated_at = CURRENT_TIMESTAMP
-      RETURNING *`,
-      [organizationId, sprintId, taskId, assigneeId, startDay, startPart, duration, plannedStartDay ?? null, plannedStartPart ?? null, plannedDuration ?? null, isQa ?? false]
+      onPrem
+        ? `INSERT INTO task_positions (
+             sprint_id, task_id, assignee_id, start_day, start_part, duration,
+             planned_start_day, planned_start_part, planned_duration, is_qa
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (sprint_id, task_id)
+           DO UPDATE SET
+             assignee_id = EXCLUDED.assignee_id,
+             start_day = EXCLUDED.start_day,
+             start_part = EXCLUDED.start_part,
+             duration = EXCLUDED.duration,
+             planned_start_day = EXCLUDED.planned_start_day,
+             planned_start_part = EXCLUDED.planned_start_part,
+             planned_duration = EXCLUDED.planned_duration,
+             is_qa = EXCLUDED.is_qa,
+             updated_at = CURRENT_TIMESTAMP
+           RETURNING *`
+        : `INSERT INTO task_positions (
+             organization_id, sprint_id, task_id, assignee_id, start_day, start_part, duration,
+             planned_start_day, planned_start_part, planned_duration, is_qa
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (organization_id, sprint_id, task_id)
+           DO UPDATE SET
+             assignee_id = EXCLUDED.assignee_id,
+             start_day = EXCLUDED.start_day,
+             start_part = EXCLUDED.start_part,
+             duration = EXCLUDED.duration,
+             planned_start_day = EXCLUDED.planned_start_day,
+             planned_start_part = EXCLUDED.planned_start_part,
+             planned_duration = EXCLUDED.planned_duration,
+             is_qa = EXCLUDED.is_qa,
+             updated_at = CURRENT_TIMESTAMP
+           RETURNING *`,
+      onPrem
+        ? [sprintId, taskId, assigneeId, startDay, startPart, duration, plannedStartDay ?? null, plannedStartPart ?? null, plannedDuration ?? null, isQa ?? false]
+        : [organizationId, sprintId, taskId, assigneeId, startDay, startPart, duration, plannedStartDay ?? null, plannedStartPart ?? null, plannedDuration ?? null, isQa ?? false]
     );
 
     // Обновляем сегменты только если поле segments явно присутствует в запросе.
     // Если его нет — не трогаем существующие task_position_segments.
     if (segments !== undefined) {
       await query(
-        'DELETE FROM task_position_segments WHERE organization_id = $1 AND sprint_id = $2 AND task_id = $3',
-        [organizationId, sprintId, taskId]
+        onPrem
+          ? 'DELETE FROM task_position_segments WHERE sprint_id = $1 AND task_id = $2'
+          : 'DELETE FROM task_position_segments WHERE organization_id = $1 AND sprint_id = $2 AND task_id = $3',
+        onPrem ? [sprintId, taskId] : [organizationId, sprintId, taskId]
       );
       if (segments.length > 0) {
         for (let i = 0; i < segments.length; i++) {
           const seg = segments[i]!;
           await query(
-            `INSERT INTO task_position_segments (organization_id, sprint_id, task_id, segment_index, start_day, start_part, duration)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (organization_id, sprint_id, task_id, segment_index)
-             DO UPDATE SET
-               start_day = EXCLUDED.start_day,
-               start_part = EXCLUDED.start_part,
-               duration = EXCLUDED.duration`,
-            [organizationId, sprintId, taskId, i, seg.startDay, seg.startPart, seg.duration]
+            onPrem
+              ? `INSERT INTO task_position_segments (sprint_id, task_id, segment_index, start_day, start_part, duration)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 ON CONFLICT (sprint_id, task_id, segment_index)
+                 DO UPDATE SET
+                   start_day = EXCLUDED.start_day,
+                   start_part = EXCLUDED.start_part,
+                   duration = EXCLUDED.duration`
+              : `INSERT INTO task_position_segments (organization_id, sprint_id, task_id, segment_index, start_day, start_part, duration)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (organization_id, sprint_id, task_id, segment_index)
+                 DO UPDATE SET
+                   start_day = EXCLUDED.start_day,
+                   start_part = EXCLUDED.start_part,
+                   duration = EXCLUDED.duration`,
+            onPrem
+              ? [sprintId, taskId, i, seg.startDay, seg.startPart, seg.duration]
+              : [organizationId, sprintId, taskId, i, seg.startDay, seg.startPart, seg.duration]
           );
         }
       }
@@ -210,6 +244,7 @@ export async function PUT(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -236,9 +271,11 @@ export async function PUT(
         planned_start_part = $6,
         planned_duration = $7,
         updated_at = CURRENT_TIMESTAMP
-      WHERE organization_id = $8 AND sprint_id = $9 AND task_id = $10
+      WHERE ${onPrem ? 'sprint_id = $8 AND task_id = $9' : 'organization_id = $8 AND sprint_id = $9 AND task_id = $10'}
       RETURNING *`,
-      [assigneeId, startDay, startPart, duration, plannedStartDay, plannedStartPart, plannedDuration, organizationId, sprintId, taskId]
+      onPrem
+        ? [assigneeId, startDay, startPart, duration, plannedStartDay, plannedStartPart, plannedDuration, sprintId, taskId]
+        : [assigneeId, startDay, startPart, duration, plannedStartDay, plannedStartPart, plannedDuration, organizationId, sprintId, taskId]
     );
 
     // Синхронизируем исполнителя в Трекере при изменении (assignee для dev, qaEngineer на dev-задаче для QA)
@@ -288,6 +325,7 @@ export async function DELETE(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId: sprintIdStr } = await resolveParams(params);
     const sprintId = parseInt(sprintIdStr, 10);
@@ -302,8 +340,10 @@ export async function DELETE(
     }
 
     await query(
-      'DELETE FROM task_positions WHERE organization_id = $1 AND sprint_id = $2 AND task_id = $3',
-      [organizationId, sprintId, taskId]
+      onPrem
+        ? 'DELETE FROM task_positions WHERE sprint_id = $1 AND task_id = $2'
+        : 'DELETE FROM task_positions WHERE organization_id = $1 AND sprint_id = $2 AND task_id = $3',
+      onPrem ? [sprintId, taskId] : [organizationId, sprintId, taskId]
     );
 
     return NextResponse.json({ success: true });

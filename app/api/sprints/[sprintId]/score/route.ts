@@ -7,6 +7,7 @@ import {
 import { requireTenantContext } from '@/lib/api-tenant';
 import { getTrackerApiFromRequest } from '@/lib/api-tracker';
 import { query } from '@/lib/db';
+import { isOnPremMode } from '@/lib/deploymentMode';
 import { resolveParams } from '@/lib/nextjs-utils';
 import {
   aggregateSprintScorePoints,
@@ -53,6 +54,17 @@ export interface SprintScoreResponse {
 function n(v: number | null | undefined): number {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
+}
+
+async function queryIssueSnapshotsMatchingSprintSafe(
+  organizationId: string,
+  args: { sprintId: string; sprintName: string }
+) {
+  try {
+    return await queryIssueSnapshotsMatchingSprint(organizationId, args);
+  } catch {
+    return [];
+  }
 }
 
 function buildScoreRow(
@@ -115,6 +127,7 @@ export async function GET(
       return tenantResult.response;
     }
     const organizationId = tenantResult.ctx.organizationId;
+    const onPrem = isOnPremMode();
 
     const { sprintId } = await resolveParams(params);
 
@@ -145,16 +158,16 @@ export async function GET(
         COUNT(*)::int AS goals_total,
         COALESCE(SUM(CASE WHEN done THEN 1 ELSE 0 END), 0)::int AS goals_done
       FROM sprint_goals
-      WHERE organization_id = $1 AND sprint_id = $2
+      WHERE ${onPrem ? 'sprint_id = $1' : 'organization_id = $1 AND sprint_id = $2'}
       GROUP BY COALESCE(NULLIF(TRIM(BOTH FROM team), ''), goal_type::text)
       ORDER BY 1 ASC
     `;
 
     const [pgResult, snapshotIssues] = await Promise.all([
-      query(goalsSql, [organizationId, sprintIdNum]),
-      queryIssueSnapshotsMatchingSprint(organizationId, {
+      query(goalsSql, onPrem ? [sprintIdNum] : [organizationId, sprintIdNum]),
+      queryIssueSnapshotsMatchingSprintSafe(organizationId, {
         sprintId: String(sprintIdNum),
-        sprintName: sprintInfo.name,
+        sprintName: sprintInfo.name ?? '',
       }),
     ]);
 

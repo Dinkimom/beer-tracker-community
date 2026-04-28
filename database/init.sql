@@ -25,7 +25,6 @@ CREATE TABLE beer_tracker.organizations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug CITEXT UNIQUE,
-    tracker_api_base_url TEXT NOT NULL DEFAULT 'https://api.tracker.yandex.net/v3',
     tracker_org_id TEXT NOT NULL DEFAULT '',
     settings JSONB NOT NULL DEFAULT '{}'::jsonb,
     sync_next_run_at TIMESTAMP WITH TIME ZONE,
@@ -511,7 +510,6 @@ CREATE TABLE IF NOT EXISTS beer_tracker.organizations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug CITEXT UNIQUE,
-    tracker_api_base_url TEXT NOT NULL DEFAULT 'https://api.tracker.yandex.net/v3',
     tracker_org_id TEXT NOT NULL DEFAULT '',
     settings JSONB NOT NULL DEFAULT '{}'::jsonb,
     sync_next_run_at TIMESTAMP WITH TIME ZONE,
@@ -529,21 +527,6 @@ COMMENT ON COLUMN beer_tracker.organizations.initial_sync_completed_at IS 'NULL 
 CREATE TRIGGER update_organizations_updated_at
     BEFORE UPDATE ON beer_tracker.organizations
     FOR EACH ROW EXECUTE FUNCTION beer_tracker.update_updated_at_column();
-
-CREATE TABLE beer_tracker.organization_members (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES beer_tracker.organizations (id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES beer_tracker.users (id) ON DELETE CASCADE,
-    role TEXT NOT NULL CHECK (role IN ('org_admin', 'member', 'team_lead')),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (organization_id, user_id),
-    UNIQUE (user_id)
-);
-
-CREATE INDEX idx_organization_members_user ON beer_tracker.organization_members (user_id);
-CREATE INDEX idx_organization_members_org ON beer_tracker.organization_members (organization_id);
-
-COMMENT ON TABLE beer_tracker.organization_members IS 'Связь user ↔ organization с ролью';
 
 CREATE TABLE beer_tracker.organization_secrets (
     organization_id UUID PRIMARY KEY REFERENCES beer_tracker.organizations (id) ON DELETE CASCADE,
@@ -609,22 +592,6 @@ CREATE TABLE beer_tracker.team_members (
 );
 
 CREATE INDEX idx_team_members_staff ON beer_tracker.team_members (staff_id);
-
-CREATE TABLE beer_tracker.user_team_memberships (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES beer_tracker.users (id) ON DELETE CASCADE,
-    team_id UUID NOT NULL REFERENCES beer_tracker.teams (id) ON DELETE CASCADE,
-    is_team_lead BOOLEAN NOT NULL DEFAULT false,
-    is_team_member BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT user_team_memberships_lead_or_member CHECK (is_team_lead OR is_team_member),
-    UNIQUE (user_id, team_id)
-);
-
-CREATE INDEX idx_user_team_memberships_user ON beer_tracker.user_team_memberships (user_id);
-CREATE INDEX idx_user_team_memberships_team ON beer_tracker.user_team_memberships (team_id);
-
-COMMENT ON TABLE beer_tracker.user_team_memberships IS 'Права пользователя продукта в команде (ACL); не путать с team_members(staff)';
 
 CREATE TABLE beer_tracker.organization_invitations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -736,7 +703,7 @@ CREATE UNIQUE INDEX uq_sync_runs_one_running_per_org ON beer_tracker.sync_runs (
 
 COMMENT ON TABLE beer_tracker.sync_runs IS 'Аудит прогонов экспортёра; stats — watermark, cursor, requested_since и т.д.';
 
--- Системная организация для /demo/planner (совпадает с migrations/020_demo_system_organization.sql).
+-- Системная организация для /demo/planner.
 -- При APP_DEPLOYMENT_MODE=onprem приложение удаляет эту строку при старте Node (см. lib/onPrem/removeDemoSystemOrganization.ts).
 INSERT INTO beer_tracker.organizations (id, name, slug, tracker_org_id, settings)
 VALUES (

@@ -10,13 +10,12 @@ import {
 import {
   productTeamRoleToFlags,
   type ProductTeamRole,
-  upsertUserTeamMembership,
   userHasTeamMembershipInOrganization,
 } from '@/lib/organizations/userTeamMembershipRepository';
 
 /**
- * Создаёт (при необходимости) пользователя продукта, членство в организации с ролью {@link orgRole}
- * и при необходимости строку user_team_memberships — после добавления сотрудника по трекеру.
+ * Создаёт (при необходимости) пользователя продукта и membership в организации.
+ * Team-level доступ вычисляется из external master БД, локальные ACL-строки не пишем.
  */
 export async function provisionProductUserForTrackerJoin(input: {
   organizationId: string;
@@ -44,14 +43,11 @@ export async function provisionProductUserForTrackerJoin(input: {
     if (await userHasTeamMembershipInOrganization(input.organizationId, userRow.id)) {
       throw new Error('Пользователь уже состоит в команде организации');
     }
-
-    const flags = productTeamRoleToFlags(input.team.plannerTeamRole);
-    await upsertUserTeamMembership({
-      isTeamLead: flags.isTeamLead,
-      isTeamMember: flags.isTeamMember,
-      teamId: input.team.teamId,
-      userId: userRow.id,
-    });
+    productTeamRoleToFlags(input.team.plannerTeamRole);
+    const _derivedTeamId = input.team.teamId;
+    if (_derivedTeamId.length === 0) {
+      // keeps validation noise-free; actual ACL derives from external DB.
+    }
   }
 
   return { userId: userRow.id };

@@ -9,6 +9,7 @@ export {
   enrichTeamMembersDisplayNamesFromTracker,
 } from './enrichTeamMembersDisplayNamesFromTracker';
 export {
+  addOverseerTeamMember,
   addTeamMember,
   listTeamIdsForStaffInOrganization,
   listTeamMembersWithStaff,

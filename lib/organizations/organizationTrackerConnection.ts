@@ -7,7 +7,7 @@ import type { QueryParams } from '@/types';
 
 import { encryptOrgTrackerToken } from '@/lib/crypto-org-secrets';
 import { pool, qualifyBeerTrackerTables } from '@/lib/db';
-import { getOrgSecretsMasterKey } from '@/lib/env';
+import { getOrgSecretsMasterKey, getTrackerConfig } from '@/lib/env';
 import { enqueueInitialFullSync } from '@/lib/sync/queue';
 import { isSyncRedisConfigured } from '@/lib/sync/redisConnection';
 import {
@@ -34,7 +34,7 @@ export interface ConnectOrganizationTrackerInput {
    */
   oauthToken?: string;
   organizationId: string;
-  /** Если не задан — берётся из организации или TRACKER_API_URL. */
+  /** Если не задан — берётся из TRACKER_API_URL. */
   trackerApiBaseUrl?: string | null;
   trackerOrgId: string;
   userId: string;
@@ -50,22 +50,13 @@ export type ConnectOrganizationTrackerResult =
     }
   | { error: string; ok: false; status: number };
 
-function resolveDefaultTrackerApiUrl(orgBase: string | undefined): string {
-  const fromOrg = orgBase?.trim();
-  if (fromOrg) {
-    return fromOrg;
-  }
-  const env = process.env.TRACKER_API_URL?.trim();
-  if (env) {
-    return env;
-  }
-  return 'https://api.tracker.yandex.net/v3';
+function resolveDefaultTrackerApiUrl(): string {
+  return getTrackerConfig().apiUrl;
 }
 
 async function persistTrackerConnection(params: {
   encryptedToken: Buffer;
   organizationId: string;
-  trackerApiBaseUrl: string;
   trackerOrgId: string;
 }): Promise<void> {
   const client = await pool.connect();
@@ -76,11 +67,10 @@ async function persistTrackerConnection(params: {
     };
     await run(
       `UPDATE organizations
-       SET tracker_api_base_url = $2,
-           tracker_org_id = $3,
+       SET tracker_org_id = $2,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [params.organizationId, params.trackerApiBaseUrl, params.trackerOrgId]
+      [params.organizationId, params.trackerOrgId]
     );
     await run(
       `INSERT INTO organization_secrets (organization_id, encrypted_tracker_token, encryption_key_version)
@@ -106,7 +96,6 @@ async function persistTrackerConnection(params: {
 
 async function persistTrackerOrgFieldsOnly(params: {
   organizationId: string;
-  trackerApiBaseUrl: string;
   trackerOrgId: string;
 }): Promise<void> {
   const client = await pool.connect();
@@ -117,11 +106,10 @@ async function persistTrackerOrgFieldsOnly(params: {
     };
     await run(
       `UPDATE organizations
-       SET tracker_api_base_url = $2,
-           tracker_org_id = $3,
+       SET tracker_org_id = $2,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [params.organizationId, params.trackerApiBaseUrl, params.trackerOrgId]
+      [params.organizationId, params.trackerOrgId]
     );
     await client.query('COMMIT');
   } catch (e) {
@@ -133,18 +121,6 @@ async function persistTrackerOrgFieldsOnly(params: {
     throw e;
   } finally {
     client.release();
-  }
-}
-
-function normalizeStoredTrackerApiUrl(raw: string): string {
-  const t = raw?.trim();
-  if (!t) {
-    return '';
-  }
-  try {
-    return normalizeTrackerApiBaseUrl(t);
-  } catch {
-    return t;
   }
 }
 
@@ -230,7 +206,7 @@ export async function verifyOrganizationTrackerTokenForAdmin(
     }
   }
 
-  const rawUrl = resolveDefaultTrackerApiUrl(org.tracker_api_base_url);
+  const rawUrl = resolveDefaultTrackerApiUrl();
   let trackerApiBaseUrl: string;
   try {
     trackerApiBaseUrl = normalizeTrackerApiBaseUrl(rawUrl);
@@ -275,7 +251,7 @@ export async function connectOrganizationTracker(
   const rawUrl =
     input.trackerApiBaseUrl != null && String(input.trackerApiBaseUrl).trim() !== ''
       ? String(input.trackerApiBaseUrl).trim()
-      : resolveDefaultTrackerApiUrl(org.tracker_api_base_url);
+      : resolveDefaultTrackerApiUrl();
 
   let trackerApiBaseUrl: string;
   try {
@@ -290,8 +266,7 @@ export async function connectOrganizationTracker(
   }
 
   const prevOrgId = org.tracker_org_id?.trim() ?? '';
-  const prevUrlNorm = normalizeStoredTrackerApiUrl(org.tracker_api_base_url ?? '');
-  const configUnchanged = prevOrgId === trackerOrgId && prevUrlNorm === trackerApiBaseUrl;
+  const configUnchanged = prevOrgId === trackerOrgId;
 
   const tokenFromInput = cleanOrganizationTrackerToken(input.oauthToken ?? '');
   const wroteNewToken = Boolean(tokenFromInput);
@@ -348,13 +323,11 @@ export async function connectOrganizationTracker(
       await persistTrackerConnection({
         encryptedToken: encrypted,
         organizationId: input.organizationId,
-        trackerApiBaseUrl,
         trackerOrgId,
       });
     } else {
       await persistTrackerOrgFieldsOnly({
         organizationId: input.organizationId,
-        trackerApiBaseUrl,
         trackerOrgId,
       });
     }

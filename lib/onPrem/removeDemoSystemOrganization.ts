@@ -7,7 +7,7 @@ import {
 } from '@/lib/onPrem/demoSystemOrganizationConstants';
 
 /**
- * Удаляет системную демо-организацию из БД (сид init.sql / миграция 020), если приложение в режиме on-prem.
+ * Удаляет системную демо-организацию из БД (сид init.sql), если приложение в режиме on-prem.
  * Иначе `hasOrganizations` остаётся true без пользователей — ломается онбординг первого администратора.
  */
 function qualifiedOrganizationsTable(): string {

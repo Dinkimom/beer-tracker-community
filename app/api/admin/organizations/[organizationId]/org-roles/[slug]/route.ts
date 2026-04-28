@@ -3,10 +3,7 @@ import { z } from 'zod';
 
 import { requireOrgAdmin, requireTenantForOrganization } from '@/lib/api-tenant';
 import { orgRoleToEntry } from '@/lib/roles/effectiveCatalog';
-import {
-  deleteOrgRoleAndClearMembers,
-  updateOrgRole,
-} from '@/lib/roles/orgRolesRepository';
+import { deleteOrgRoleAndClearMembers, updateOrgRole } from '@/lib/roles/orgRolesRepository';
 import { formatValidationError } from '@/lib/validation';
 
 const UpdateBodySchema = z
@@ -48,10 +45,7 @@ export async function PATCH(
 
   const parsed = UpdateBodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: formatValidationError(parsed.error) },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: formatValidationError(parsed.error) }, { status: 400 });
   }
 
   const row = await updateOrgRole(auth.ctx.organizationId, slug, parsed.data);
@@ -59,7 +53,10 @@ export async function PATCH(
     return NextResponse.json({ error: 'Роль не найдена' }, { status: 404 });
   }
 
-  return NextResponse.json({ role: orgRoleToEntry(row) });
+  return NextResponse.json(
+    { role: orgRoleToEntry(row) },
+    { status: 200 }
+  );
 }
 
 /**
@@ -70,6 +67,9 @@ export async function DELETE(
   request: Request,
   routeContext: { params: Promise<{ organizationId: string; slug: string }> }
 ) {
+  if (request) {
+    // keep signature aligned with Next.js route handlers.
+  }
   const { organizationId, slug: slugParam } = await routeContext.params;
   const slug = decodeURIComponent(slugParam).trim().toLowerCase();
 
@@ -87,5 +87,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'Роль не найдена' }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true }, { status: 200 });
 }
