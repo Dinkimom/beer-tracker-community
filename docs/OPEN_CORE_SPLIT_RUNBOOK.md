@@ -2,6 +2,8 @@
 
 Операционный runbook для публикации community-core из private-репозитория в public.
 
+Канонический public-репозиторий: **[github.com/Dinkimom/beer-tracker-community](https://github.com/Dinkimom/beer-tracker-community)**. Секрет `PUBLIC_CORE_REPO` в private CI обычно выставляют в `Dinkimom/beer-tracker-community`.
+
 ## Цель
 
 - Синхронизировать public-репозиторий только с разрешённой частью кода (community-core).
@@ -16,7 +18,7 @@
 
 ## Предусловия
 
-- Public repo создан и доступен токену с правом push.
+- Public repo создан и доступен токену с правом push (см. канонический URL выше).
 - В public есть целевая ветка (`main` или `master`, согласно `PUBLIC_CORE_TARGET_BRANCH`).
 - В private настроены CI (Actions):
   - **Secrets:** `PUBLIC_CORE_REPO` (`owner/repo`), `PUBLIC_CORE_PUSH_TOKEN` (PAT с write на contents)

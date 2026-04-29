@@ -82,6 +82,7 @@ beer-tracker/
 | [REFACTORING_BACKLOG.md](./REFACTORING_BACKLOG.md) | Что уже отрефакторено и бэклог на будущее | Разработчики |
 | [OPEN_CORE_SPLIT_READINESS.md](./OPEN_CORE_SPLIT_READINESS.md) | Готовность к разделению private/public | Разработчики, DevOps |
 | [OPEN_CORE_SPLIT_RUNBOOK.md](./OPEN_CORE_SPLIT_RUNBOOK.md) | Операционный runbook публикации community-core | Разработчики, DevOps |
+| [sync-public-private/README.md](./sync-public-private/README.md) | PR из public → синк в private (`contribute.sh`, downstream) | Мейнтейнеры |
 | [SIDEBAR_MIGRATION.md](../SIDEBAR_MIGRATION.md) | Миграция сайдбара | Разработчики |
 
 ## 🔍 Поиск по темам

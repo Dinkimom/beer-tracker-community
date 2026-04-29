@@ -1,5 +1,7 @@
 # Участие в разработке и DCO
 
+Патчи в **публикуемую community-часть** (open-core) принимаются в отдельном репозитории GitHub: **[beer-tracker-community](https://github.com/Dinkimom/beer-tracker-community)** — см. `CONTRIBUTING` там и [`docs/sync-public-private/README.md`](./docs/sync-public-private/README.md). В **этом** (private) репозитории по-прежнему действуют правила ниже.
+
 Для merge request в этом репозитории действует **Developer Certificate of Origin (DCO) 1.1**: в каждом коммите (кроме merge-коммитов) в сообщении должна быть строка **Signed-off-by** с тем же email, что у автора коммита (`git` `config user.email`).
 
 ## Как подписать коммиты
