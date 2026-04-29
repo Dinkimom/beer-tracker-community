@@ -141,3 +141,5 @@ pnpm test
 ## Поддержка
 
 Начните с [DOCUMENTATION_INDEX.md](./docs/DOCUMENTATION_INDEX.md) и при необходимости с [API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md).
+
+<!-- community:pr smoke -->
