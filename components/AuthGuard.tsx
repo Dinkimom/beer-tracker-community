@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
 import { Icon } from '@/components/Icon';
 import { ZIndex } from '@/constants';
@@ -53,7 +53,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
-  const [onPremBypass, setOnPremBypass] = useState(false);
   const usableTrackerToken = useSyncExternalStore(
     subscribeTrackerTokenGate,
     getTrackerTokenGateSnapshot,
@@ -85,11 +84,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
         if (cancelled) {
           return;
         }
-        if (data.onPremMode) {
-          setOnPremBypass(true);
-          return;
-        }
-        if (data.onPremMode && data.hasUsers !== true) {
+        if (data.onPremMode === true && data.hasUsers !== true) {
           router.replace('/register?next=/admin');
           return;
         }
@@ -125,7 +120,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
   }
 
   if (
-    onPremBypass ||
     bypassTrackerToken(pathname) ||
     (usableTrackerToken && usableTrackerToken.trim() !== '')
   ) {
