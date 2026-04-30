@@ -5,6 +5,8 @@
 import type { QueryParams } from '@/types';
 import type { TrackerIssue } from '@/types/tracker';
 
+import { DatabaseError } from 'pg';
+
 import { issueDataSprintContains } from '@/lib/burndown/sprintMembership';
 import { query } from '@/lib/db';
 import { isDbCompatibilityMode } from '@/lib/env';
@@ -68,6 +70,18 @@ const SPRINT_MATCH_SQL = `
   )
 `;
 
+function isPostgresUndefinedTable(err: unknown): boolean {
+  return err instanceof DatabaseError && err.code === '42P01';
+}
+
+function isPostgresQueryCanceled(err: unknown): boolean {
+  return err instanceof DatabaseError && err.code === '57014';
+}
+
+function isSafeSnapshotFallbackError(err: unknown): boolean {
+  return isPostgresUndefinedTable(err) || isPostgresQueryCanceled(err);
+}
+
 /**
  * Задачи, у которых в снимке спринт совпадает с именем/id (текущее состояние экспорта).
  */
@@ -90,20 +104,36 @@ export async function queryIssueSnapshotsMatchingSprint(
     )
   `;
 
-  const res = await query<SnapshotDbRow>(
-    `SELECT organization_id, issue_key, payload, tracker_updated_at, synced_at
-     FROM issue_snapshots
-     WHERE organization_id = $1
-     ${teamSql}
-     ${SPRINT_MATCH_SQL}`,
-    args
-  );
+  try {
+    const res = await query<SnapshotDbRow>(
+      `SELECT organization_id, issue_key, payload, tracker_updated_at, synced_at
+       FROM issue_snapshots
+       WHERE organization_id = $1
+       ${teamSql}
+       ${SPRINT_MATCH_SQL}`,
+      args
+    );
 
-  const rows = res.rows.map((r) => r.payload);
-  if (rows.length > 0 || !isDbCompatibilityMode()) {
-    return rows;
+    const rows = res.rows.map((r) => r.payload);
+    if (rows.length > 0 || !isDbCompatibilityMode()) {
+      return rows;
+    }
+  } catch (error) {
+    if (!isSafeSnapshotFallbackError(error)) {
+      throw error;
+    }
   }
-  const fallback = await queryAllOverseerIssues();
+
+  let fallback: TrackerIssue[];
+  try {
+    fallback = await queryAllOverseerIssues();
+  } catch (error) {
+    if (!isSafeSnapshotFallbackError(error)) {
+      throw error;
+    }
+    return [];
+  }
+
   return fallback.filter((issue) => {
     if (!issueDataSprintContains(issue, name, sid ?? undefined)) {
       return false;

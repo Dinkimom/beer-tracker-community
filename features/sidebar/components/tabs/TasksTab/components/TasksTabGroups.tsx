@@ -6,6 +6,7 @@ import type { Developer, LayoutViewMode, SidebarGroupBy, Task } from '@/types';
 
 import { useI18n } from '@/contexts/LanguageContext';
 import { DraggableTask } from '@/features/task/components/DraggableTask';
+import { formatTaskGroupLabel } from '@/features/task/utils/formatTaskGroupLabel';
 
 interface TasksTabGroupsProps {
   activeTaskDuration?: number | null;
@@ -63,7 +64,7 @@ export function TasksTabGroups({
             {groupBy !== 'none' && (
               <div className="mb-3">
                 <h3 className="w-full text-center text-xs font-semibold text-gray-800 dark:text-gray-200 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded-md">
-                  {groupKey}
+                  {formatTaskGroupLabel(groupKey, t)}
                   <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold text-white bg-blue-600 rounded-full">
                     {tasksInGroup.length}
                   </span>

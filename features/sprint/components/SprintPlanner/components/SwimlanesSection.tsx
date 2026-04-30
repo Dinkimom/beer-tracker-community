@@ -10,7 +10,7 @@ import type { QuarterlyAvailability } from '@/types/quarterly';
 import type { ChangelogEntry, IssueComment } from '@/types/tracker';
 
 import { observer } from 'mobx-react-lite';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Xwrapper } from 'react-xarrows';
 
 import { WORKING_DAYS } from '@/constants';
@@ -159,6 +159,12 @@ export const SwimlanesSection = observer(function SwimlanesSection({
     }
   }, [swimlaneFactTimelineEnabled]);
 
+  useEffect(() => {
+    if (dragAndDrop.isDraggingTask) {
+      setFactHoveredTaskId(null);
+    }
+  }, [dragAndDrop.isDraggingTask]);
+
   const holidayDayIndices = useHolidayDays(sprintStartDate, sprintTimelineWorkingDays);
 
   const swimlaneFactDeveloperMap = useMemo(
@@ -226,6 +232,17 @@ export const SwimlanesSection = observer(function SwimlanesSection({
     [hoveredTaskId, filteredTaskLinks, qaTasksMap, taskPositions]
   );
 
+  const handleTaskHover = useCallback((taskId: string | null) => {
+    if (dragAndDrop.isDraggingTask) {
+      sprintPlannerUi.setHoveredTaskId(null);
+      return;
+    }
+    sprintPlannerUi.setHoveredTaskId(taskId);
+    setFactHoveredTaskId(taskId);
+  }, [dragAndDrop.isDraggingTask, sprintPlannerUi]);
+
+  const effectiveFactHoveredTaskId = dragAndDrop.isDraggingTask ? null : factHoveredTaskId;
+
   const swimlanesContentWidth = sprintPlannerDaysHeaderContentWidthCss(
     viewMode,
     participantsColumnWidth,
@@ -290,7 +307,7 @@ export const SwimlanesSection = observer(function SwimlanesSection({
                   disableCloseSidebarOnClick={true}
                   errorReasons={occupancyErrorReasons}
                   errorTaskIds={occupancyErrorTaskIds}
-                  factHoveredTaskId={factHoveredTaskId}
+                  factHoveredTaskId={effectiveFactHoveredTaskId}
                   globalNameFilter={globalNameFilter}
                   holidayDayIndices={holidayDayIndices}
                   hoverConnectedTaskIds={showLinks && linksDimOnHover ? hoverConnectedTaskIds : null}
@@ -326,11 +343,11 @@ export const SwimlanesSection = observer(function SwimlanesSection({
                   onCommentUpdate={onCommentUpdate}
                   onContextMenu={onContextMenu}
                   onCreateQATask={onCreateQATask}
-                  onFactSegmentHover={setFactHoveredTaskId}
+                  onFactSegmentHover={dragAndDrop.isDraggingTask ? () => undefined : setFactHoveredTaskId}
                   onSegmentEditCancel={() => sprintPlannerUi.setSegmentEditTaskId(null)}
                   onSegmentEditSave={onSegmentEditSave}
                   onTaskClick={onTaskClick}
-                  onTaskHover={sprintPlannerUi.setHoveredTaskId}
+                  onTaskHover={handleTaskHover}
                   onTaskResize={onTaskResize}
                 />
               );

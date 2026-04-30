@@ -33,6 +33,7 @@ export function SwimlaneFactFlexPhaseBar({
   seg,
   tasksMap,
   widthInSpan,
+  factHoveredTaskId = null,
 }: {
   assigneeRole: Developer['role'];
   barDomId: string;
@@ -47,6 +48,7 @@ export function SwimlaneFactFlexPhaseBar({
   seg: SwimlaneInProgressFactSegment;
   tasksMap: Map<string, Task>;
   widthInSpan: number;
+  factHoveredTaskId?: string | null;
 }) {
   const { changelog, comments: issueComments } = useMemo(
     () =>
@@ -74,6 +76,9 @@ export function SwimlaneFactFlexPhaseBar({
   const durationStr = formatDuration(phase.durationMs);
 
   const statusTooltipId = `${layerId}-${seg.taskId}-${phase.startCell}-${phase.endCell}`;
+  const isFactHovered = factHoveredTaskId === seg.taskId;
+  const isDimmedByFactHover =
+    factHoveredTaskId != null && factHoveredTaskId !== seg.taskId;
 
   return (
     <TextTooltip
@@ -95,7 +100,7 @@ export function SwimlaneFactFlexPhaseBar({
       singleInGroupId={statusTooltipId}
     >
       <div
-        className={`flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 opacity-60 hover:opacity-100 transition-opacity pointer-events-auto cursor-pointer box-border ${bgClass} ${borderClass}`}
+        className={`flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 transition-opacity pointer-events-auto cursor-pointer box-border ${bgClass} ${borderClass} ${isFactHovered ? 'opacity-100' : isDimmedByFactHover ? 'opacity-35' : 'opacity-60 hover:opacity-100'}`}
         id={barDomId}
         style={{
           flex: `${widthInSpan} 0 0`,

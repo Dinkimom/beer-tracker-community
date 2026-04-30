@@ -3,28 +3,12 @@
 import { Button } from '@/components/Button';
 import { useI18n } from '@/contexts/LanguageContext';
 import { useTaskSidebar } from '@/features/sidebar/contexts/TaskSidebarContext';
-import {
-  TASK_GROUP_KEY_NO_PARENT,
-  TASK_GROUP_KEY_UNASSIGNED,
-} from '@/features/task/constants/taskGroupKeys';
 import type { ValidationIssue } from '@/features/task/utils/taskValidation';
 import { getSidebarTaskGroupKey } from '@/features/task/utils/taskSidebarGroupKey';
+import { formatTaskGroupLabel } from '@/features/task/utils/formatTaskGroupLabel';
 
 function validationMessage(issue: ValidationIssue, t: (k: string, p?: Record<string, string | number>) => string) {
   return t(`task.validation.${issue.type}`, issue.params);
-}
-
-function formatInvalidTabGroupLabel(
-  groupKey: string,
-  t: (k: string, p?: Record<string, string | number>) => string
-): string {
-  if (groupKey === TASK_GROUP_KEY_UNASSIGNED) {
-    return t('task.grouping.unassigned');
-  }
-  if (groupKey === TASK_GROUP_KEY_NO_PARENT) {
-    return t('task.grouping.noParent');
-  }
-  return groupKey;
 }
 
 export function InvalidTab() {
@@ -109,7 +93,7 @@ export function InvalidTab() {
                 {groupBy !== 'none' && (
                   <div className="mb-3">
                     <h3 className="w-full text-center text-xs font-semibold text-gray-800 dark:text-gray-200 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded-md">
-                      {formatInvalidTabGroupLabel(groupKey, t)}
+                      {formatTaskGroupLabel(groupKey, t)}
                       <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold text-white bg-blue-600 rounded-full">
                         {invalidTasksInGroup.length}
                       </span>
