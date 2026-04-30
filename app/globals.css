@@ -69,6 +69,13 @@ html * {
   transition-timing-function: ease !important;
 }
 
+/* Разрешаем анимацию изменения ширины карточки при long-hover */
+.task-bar-item {
+  transition-property: width, left !important;
+  transition-duration: 0.25s !important;
+  transition-timing-function: ease-out !important;
+}
+
 /* Исключение: плавное появление ленивого контента (таймлайн факта, плановые фазы) при скролле */
 .occupancy-lazy-fade-in {
   transition-property: opacity !important;

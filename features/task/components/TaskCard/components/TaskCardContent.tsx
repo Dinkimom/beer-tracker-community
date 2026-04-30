@@ -142,7 +142,6 @@ export function TaskCardContent({
   }
 
   // Определяем режимы отображения на основе длительности (только для swimlane)
-  const isVeryNarrow = displayDuration < 3;
   const isNarrow = displayDuration < 4;
 
   const textSize = isNarrow ? 'text-[10px]' : 'text-xs';
@@ -198,13 +197,7 @@ export function TaskCardContent({
 
   return (
     <div ref={wrapperRef} className="relative flex-1 overflow-hidden min-h-0">
-      {isVeryNarrow && !isDragging ? (
-        <TextTooltip content={displayText} delayDuration={300}>
-          {contentEl}
-        </TextTooltip>
-      ) : (
-        contentEl
-      )}
+      {contentEl}
     </div>
   );
 }
