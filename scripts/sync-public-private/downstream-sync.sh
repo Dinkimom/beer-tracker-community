@@ -154,11 +154,60 @@ if ! git -C "${PRIVATE_DIR}" apply --3way --index "${PATCH_FILE}"; then
       echo "  git -C \"${PRIVATE_DIR}\" push -u origin \"HEAD:${SYNC_BRANCH}\"" >&2
       exit 2
     fi
-    git -C "${PRIVATE_DIR}" apply --reject --whitespace=fix "${PATCH_FILE}" >/dev/null 2>&1 || true
-    echo "git apply failed; wrote reject hunks (*.rej)." >&2
-    echo "Open ${PRIVATE_DIR} and resolve using .rej files, then:" >&2
+    echo "git apply failed without usable conflict state; generating file-level 3-way markers..." >&2
+    while IFS= read -r rel; do
+      [[ -z "${rel}" ]] && continue
+      rel_dir="$(dirname "${rel}")"
+      mkdir -p "${WORKDIR}/merge-base/${rel_dir}" "${WORKDIR}/merge-ours/${rel_dir}" "${WORKDIR}/merge-theirs/${rel_dir}"
+      base_f="${WORKDIR}/merge-base/${rel}"
+      ours_f="${WORKDIR}/merge-ours/${rel}"
+      theirs_f="${WORKDIR}/merge-theirs/${rel}"
+
+      if git -C "${PUBLIC_DIR}" cat-file -e "${BEFORE_SHA}:${rel}" 2>/dev/null; then
+        git -C "${PUBLIC_DIR}" show "${BEFORE_SHA}:${rel}" >"${base_f}"
+      else
+        : >"${base_f}"
+      fi
+      if [[ -f "${PRIVATE_DIR}/${rel}" ]]; then
+        cp -f "${PRIVATE_DIR}/${rel}" "${ours_f}"
+      else
+        : >"${ours_f}"
+      fi
+      if git -C "${PUBLIC_DIR}" cat-file -e "${AFTER_SHA}:${rel}" 2>/dev/null; then
+        git -C "${PUBLIC_DIR}" show "${AFTER_SHA}:${rel}" >"${theirs_f}"
+      else
+        : >"${theirs_f}"
+      fi
+
+      if [[ ! -s "${theirs_f}" ]]; then
+        if [[ -f "${PRIVATE_DIR}/${rel}" ]]; then
+          if cmp -s "${ours_f}" "${base_f}"; then
+            rm -f "${PRIVATE_DIR}/${rel}"
+          else
+            git merge-file -L "ours:${rel}" -L "base:${rel}" -L "theirs:deleted" "${ours_f}" "${base_f}" "${theirs_f}" >/dev/null 2>&1 || true
+            cp -f "${ours_f}" "${PRIVATE_DIR}/${rel}"
+          fi
+        fi
+      else
+        if [[ ! -f "${PRIVATE_DIR}/${rel}" ]]; then
+          mkdir -p "$(dirname "${PRIVATE_DIR}/${rel}")"
+          cp -f "${theirs_f}" "${PRIVATE_DIR}/${rel}"
+        else
+          if cmp -s "${ours_f}" "${base_f}"; then
+            cp -f "${theirs_f}" "${PRIVATE_DIR}/${rel}"
+          elif cmp -s "${theirs_f}" "${base_f}" || cmp -s "${ours_f}" "${theirs_f}"; then
+            :
+          else
+            git merge-file -L "ours:${rel}" -L "base:${rel}" -L "theirs:${rel}" "${ours_f}" "${base_f}" "${theirs_f}" >/dev/null 2>&1 || true
+            cp -f "${ours_f}" "${PRIVATE_DIR}/${rel}"
+          fi
+        fi
+      fi
+    done < <(git -C "${PUBLIC_DIR}" diff --name-only "${BEFORE_SHA}" "${AFTER_SHA}" -- .)
+    echo "Created conflict markers directly in files where needed." >&2
+    echo "Open ${PRIVATE_DIR}, run git status, resolve markers, then:" >&2
     echo "  git -C \"${PRIVATE_DIR}\" add -A" >&2
-    echo "  git -C \"${PRIVATE_DIR}\" commit -m \"sync(public): resolve rejects ${BEFORE_SHA:0:7}..${AFTER_SHA:0:7}\"" >&2
+    echo "  git -C \"${PRIVATE_DIR}\" commit -m \"sync(public): resolve conflicts ${BEFORE_SHA:0:7}..${AFTER_SHA:0:7}\"" >&2
     echo "  git -C \"${PRIVATE_DIR}\" push -u origin \"HEAD:${SYNC_BRANCH}\"" >&2
     exit 2
   fi

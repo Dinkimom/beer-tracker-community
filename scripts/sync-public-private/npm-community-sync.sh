@@ -55,9 +55,12 @@ fi
 export PRIVATE_REPO_CLONE_URL
 export PRIVATE_GIT_TOKEN
 export PRIVATE_TARGET_BRANCH="${PRIVATE_TARGET_BRANCH:-master}"
-export KEEP_WORKDIR_ON_ERROR="${KEEP_WORKDIR_ON_ERROR:-1}"
-export PRIVATE_SYNC_WORKDIR="${PRIVATE_SYNC_WORKDIR:-${REPO_ROOT}/.sync/community-conflicts}"
 export PRIVATE_LOCAL_REPO_DIR="${PRIVATE_LOCAL_REPO_DIR:-${REPO_ROOT}}"
+export KEEP_WORKDIR_ON_ERROR="${KEEP_WORKDIR_ON_ERROR:-0}"
+# By default we work directly in PRIVATE_LOCAL_REPO_DIR and do not keep temp conflict dirs.
+# If you want the old isolated mode, set PRIVATE_LOCAL_REPO_DIR="" and optionally:
+#   PRIVATE_SYNC_WORKDIR=.sync/community-conflicts
+#   KEEP_WORKDIR_ON_ERROR=1
 
 COMMUNITY_SLUG="${COMMUNITY_REPO_SLUG:-Dinkimom/beer-tracker-community}"
 
