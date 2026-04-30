@@ -102,6 +102,7 @@ if [[ -n "${PUBLIC_DIR}" && -n "${PUBLIC_REPO_SLUG}" ]]; then
   exit 1
 fi
 
+PUBLIC_MAIN_FETCHED=0
 if [[ -n "${PUBLIC_REPO_SLUG}" ]]; then
   ROOT="${PUBLIC_CLONE_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/beer-tracker/public-git}"
   SAFE_NAME="${PUBLIC_REPO_SLUG//\//-}"
@@ -114,6 +115,7 @@ if [[ -n "${PUBLIC_REPO_SLUG}" ]]; then
     echo "[sync-from-public] fetch ${PUBLIC_REMOTE} ${PUBLIC_BRANCH} in ${PUBLIC_DIR}" >&2
     git -C "${PUBLIC_DIR}" fetch "${PUBLIC_REMOTE}" "${PUBLIC_BRANCH}"
   fi
+  PUBLIC_MAIN_FETCHED=1
   export PUBLIC_REPO_SLUG_FOR_STATE="${SAFE_NAME}"
 fi
 
@@ -166,7 +168,9 @@ if [[ -n "${GH_BEFORE}" || -n "${GH_AFTER}" ]]; then
   git -C "${PUBLIC_DIR}" fetch --depth 500 "${PUBLIC_REMOTE}" "${PUBLIC_BRANCH}" 2>/dev/null || true
   git -C "${PUBLIC_DIR}" fetch "${PUBLIC_REMOTE}" "${AFTER_SHA}" 2>/dev/null || true
 else
-  git -C "${PUBLIC_DIR}" fetch "${PUBLIC_REMOTE}" "${PUBLIC_BRANCH}"
+  if [[ "${PUBLIC_MAIN_FETCHED:-0}" -ne 1 ]]; then
+    git -C "${PUBLIC_DIR}" fetch "${PUBLIC_REMOTE}" "${PUBLIC_BRANCH}"
+  fi
   REF_FULL="${PUBLIC_REMOTE}/${PUBLIC_BRANCH}"
   AFTER_TIP="$(git -C "${PUBLIC_DIR}" rev-parse "${REF_FULL}")"
 

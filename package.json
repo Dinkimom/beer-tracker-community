@@ -20,6 +20,7 @@
     "i18n:import": "tsx scripts/i18n/import-messages.ts",
     "open-core:export": "tsx scripts/open-core/build-community-core-export.ts",
     "open-core:publish": "bash scripts/open-core/publish-community-core.sh",
+    "sync:from-community": "bash scripts/sync-public-private/npm-community-sync.sh",
     "community:pr": "bash scripts/sync-public-private/contribute-to-community.sh",
     "test": "vitest run && pnpm check:i18n",
     "test:watch": "vitest",
