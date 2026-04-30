@@ -30,7 +30,6 @@ export function SwimlaneClosedFactMarker({
   seg,
   tasksMap,
   factHoveredTaskId = null,
-  hoveredTaskId = null,
 }: {
   assigneeRole: Developer['role'];
   barDomId: string;
@@ -45,7 +44,6 @@ export function SwimlaneClosedFactMarker({
   seg: SwimlaneInProgressFactSegment;
   tasksMap: Map<string, Task>;
   factHoveredTaskId?: string | null;
-  hoveredTaskId?: string | null;
 }) {
   const { changelog, comments: issueComments } = useMemo(
     () =>

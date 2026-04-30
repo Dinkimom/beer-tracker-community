@@ -34,7 +34,6 @@ export function SwimlaneFactFlexPhaseBar({
   tasksMap,
   widthInSpan,
   factHoveredTaskId = null,
-  hoveredTaskId = null,
 }: {
   assigneeRole: Developer['role'];
   barDomId: string;
@@ -50,7 +49,6 @@ export function SwimlaneFactFlexPhaseBar({
   tasksMap: Map<string, Task>;
   widthInSpan: number;
   factHoveredTaskId?: string | null;
-  hoveredTaskId?: string | null;
 }) {
   const { changelog, comments: issueComments } = useMemo(
     () =>
