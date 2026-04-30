@@ -29,6 +29,8 @@ export function SwimlaneClosedFactMarker({
   phase,
   seg,
   tasksMap,
+  factHoveredTaskId = null,
+  hoveredTaskId = null,
 }: {
   assigneeRole: Developer['role'];
   barDomId: string;
@@ -42,6 +44,8 @@ export function SwimlaneClosedFactMarker({
   phase: StatusPhaseCell;
   seg: SwimlaneInProgressFactSegment;
   tasksMap: Map<string, Task>;
+  factHoveredTaskId?: string | null;
+  hoveredTaskId?: string | null;
 }) {
   const { changelog, comments: issueComments } = useMemo(
     () =>
@@ -66,6 +70,9 @@ export function SwimlaneClosedFactMarker({
     ? `${statusColors.border} ${statusColors.borderDark}`
     : statusColors.border;
   const statusTooltipId = `${layerId}-closed-${seg.taskId}-${phase.startCell}-${phase.endCell}`;
+  const isFactHovered = factHoveredTaskId === seg.taskId;
+  const isDimmedByFactHover =
+    factHoveredTaskId != null && factHoveredTaskId !== seg.taskId;
 
   return (
     <div
@@ -92,7 +99,7 @@ export function SwimlaneClosedFactMarker({
       >
         <div
           aria-label={`${phase.statusKey}: закрыто`}
-          className={`pointer-events-auto flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 opacity-60 shadow-sm transition-opacity hover:opacity-100 cursor-pointer box-border ${bgClass} ${borderClass}`}
+          className={`pointer-events-auto flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 shadow-sm transition-opacity cursor-pointer box-border ${bgClass} ${borderClass} ${isFactHovered ? 'opacity-100' : isDimmedByFactHover ? 'opacity-35' : 'opacity-60 hover:opacity-100'}`}
           id={barDomId}
           role="img"
           style={{

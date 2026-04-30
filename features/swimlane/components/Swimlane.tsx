@@ -287,6 +287,8 @@ export function Swimlane({
                 sprintStartDate={sprintStartDate}
                 swimlaneRowTaskIds={swimlaneRowTaskIds}
                 tasksMap={tasksMap}
+                factHoveredTaskId={factHoveredTaskId}
+                hoveredTaskId={hoveredTaskId}
                 onFactSegmentHover={onFactSegmentHover}
               />
             )}

@@ -27,6 +27,8 @@ export function SwimlaneFactLaneFlexRow({
   swimlaneRowTaskIds,
   tasksMap,
   timelineStartCell,
+  factHoveredTaskId = null,
+  hoveredTaskId = null,
 }: {
   assigneeRole: Developer['role'];
   changelogsByTaskId: Map<string, ChangelogEntry[]>;
@@ -40,6 +42,8 @@ export function SwimlaneFactLaneFlexRow({
   swimlaneRowTaskIds: Set<string>;
   tasksMap: Map<string, Task>;
   timelineStartCell: number;
+  factHoveredTaskId?: string | null;
+  hoveredTaskId?: string | null;
 }) {
   if (spanCells <= 0 || laneItems.length === 0) return null;
 
@@ -78,6 +82,8 @@ export function SwimlaneFactLaneFlexRow({
           phase={phase}
           seg={seg}
           tasksMap={tasksMap}
+          factHoveredTaskId={factHoveredTaskId}
+          hoveredTaskId={hoveredTaskId}
           onFactSegmentHover={onFactSegmentHover}
         />
       );
@@ -100,6 +106,8 @@ export function SwimlaneFactLaneFlexRow({
         seg={seg}
         tasksMap={tasksMap}
         widthInSpan={widthInSpan}
+        factHoveredTaskId={factHoveredTaskId}
+        hoveredTaskId={hoveredTaskId}
         onFactSegmentHover={onFactSegmentHover}
       />
     );
