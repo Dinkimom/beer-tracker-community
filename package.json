@@ -22,7 +22,6 @@
     "open-core:publish": "bash scripts/open-core/publish-community-core.sh",
     "sync:from-community": "bash scripts/sync-public-private/npm-community-sync.sh",
     "community:pr": "bash scripts/sync-public-private/contribute-to-community.sh",
-    "git:untrack-artifacts": "bash scripts/git-untrack-build-artifacts.sh",
     "test": "vitest run && pnpm check:i18n",
     "test:watch": "vitest",
     "prepare": "husky",

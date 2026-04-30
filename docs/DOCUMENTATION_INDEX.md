@@ -83,7 +83,6 @@ beer-tracker/
 | [OPEN_CORE_SPLIT_READINESS.md](./OPEN_CORE_SPLIT_READINESS.md) | Готовность к разделению private/public | Разработчики, DevOps |
 | [OPEN_CORE_SPLIT_RUNBOOK.md](./OPEN_CORE_SPLIT_RUNBOOK.md) | Операционный runbook публикации community-core | Разработчики, DevOps |
 | [sync-public-private/README.md](./sync-public-private/README.md) | PR из public → синк в private (`contribute.sh`, downstream) | Мейнтейнеры |
-| [sync-public-private/CONTRIBUTING_EXAMPLE.md](./sync-public-private/CONTRIBUTING_EXAMPLE.md) | Пошаговый пример: новая ветка от `upstream/main` и `community:pr` | Мейнтейнеры |
 | [SIDEBAR_MIGRATION.md](../SIDEBAR_MIGRATION.md) | Миграция сайдбара | Разработчики |
 
 ## 🔍 Поиск по темам

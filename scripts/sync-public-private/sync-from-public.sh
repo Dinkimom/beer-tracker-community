@@ -23,7 +23,8 @@
 #
 # Pass-through to downstream-sync.sh:
 #   PRIVATE_REPO_CLONE_URL, PRIVATE_GIT_TOKEN, PRIVATE_TARGET_BRANCH (optional),
-#   PRIVATE_USE_GITHUB_TOKEN_AUTH, PUBLIC_REPO_SLUG, SYNC_ID, UPSTREAM_PR_URL
+#   PRIVATE_USE_GITHUB_TOKEN_AUTH, PUBLIC_REPO_SLUG, SYNC_ID, UPSTREAM_PR_URL,
+#   KEEP_WORKDIR_ON_ERROR=1, PRIVATE_SYNC_WORKDIR=/path/to/dir
 #
 # Examples:
 #   # One command: ensure clone, diff since last successful sync, downstream:
@@ -213,8 +214,11 @@ if [[ "${BEFORE_SHA}" =~ ^0+$ ]]; then
   exit 1
 fi
 
-if ! "${DOWNSTREAM}"; then
-  exit_code=$?
+set +e
+"${DOWNSTREAM}"
+exit_code=$?
+set -e
+if [[ "${exit_code}" -ne 0 ]]; then
   echo "[sync-from-public] downstream-sync.sh exited ${exit_code}" >&2
   exit "${exit_code}"
 fi

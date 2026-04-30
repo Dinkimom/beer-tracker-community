@@ -234,9 +234,6 @@ fi
 
 file_count="$(grep -c . "${SCOPED_LIST}" || true)"
 echo "--- Raw paths vs ${UPSTREAM_TIP}: ${raw_count}; open-core scoped: ${file_count} ---" >&2
-echo "Note: this list comes from committed history only (git diff ${UPSTREAM_TIP}...HEAD)." >&2
-echo "Untracked files are never included — .gitignore does not apply to that diff." >&2
-echo "If build dirs (e.g. .next/, node_modules/) appear, they are tracked: pnpm git:untrack-artifacts then commit." >&2
 
 MAX_FILES="${COMMUNITY_PR_MAX_FILES:-200}"
 if [[ "${MAX_FILES}" != "0" ]] && [[ -z "${COMMUNITY_PR_SKIP_FILE_LIMIT:-}" ]] && [[ "${file_count}" -gt "${MAX_FILES}" ]]; then

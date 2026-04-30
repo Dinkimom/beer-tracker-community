@@ -22,6 +22,9 @@
 #   PUBLIC_REPO_SLUG   e.g. acme/repo
 #   SYNC_ID            from contributor PR body
 #   UPSTREAM_PR_URL    merged public PR link
+# Conflict/debug ergonomics:
+#   KEEP_WORKDIR_ON_ERROR=1   do not delete workdir on non-zero exit
+#   PRIVATE_SYNC_WORKDIR=PATH use explicit workdir path (reused/cleaned each run)
 #
 set -euo pipefail
 
@@ -43,8 +46,30 @@ if [[ "${BEFORE_SHA}" =~ ^0+$ ]]; then
   exit 1
 fi
 
-WORKDIR="$(mktemp -d)"
-trap 'rm -rf "${WORKDIR}"' EXIT
+KEEP_WORKDIR_ON_ERROR="${KEEP_WORKDIR_ON_ERROR:-0}"
+WORKDIR_AUTO=1
+if [[ -n "${PRIVATE_SYNC_WORKDIR:-}" ]]; then
+  WORKDIR="${PRIVATE_SYNC_WORKDIR}"
+  WORKDIR_AUTO=0
+  rm -rf "${WORKDIR}"
+  mkdir -p "${WORKDIR}"
+else
+  WORKDIR="$(mktemp -d)"
+fi
+
+cleanup_workdir() {
+  rc=$?
+  if [[ "${WORKDIR_AUTO}" -eq 1 && "${KEEP_WORKDIR_ON_ERROR}" != "1" ]]; then
+    rm -rf "${WORKDIR}"
+    return
+  fi
+  if [[ "${rc}" -ne 0 ]]; then
+    echo "Kept workdir for manual conflict resolution: ${WORKDIR}" >&2
+    echo "Private clone path: ${WORKDIR}/private" >&2
+    echo "Patch file path: ${PATCH_FILE:-${WORKDIR}/public-range.patch}" >&2
+  fi
+}
+trap cleanup_workdir EXIT
 
 PATCH_FILE="${WORKDIR}/public-range.patch"
 
@@ -78,7 +103,13 @@ fi
 git -C "${WORKDIR}/private" checkout -b "${SYNC_BRANCH}" "origin/${PRIVATE_TARGET_BRANCH}"
 
 if ! git -C "${WORKDIR}/private" apply --3way "${PATCH_FILE}"; then
-  echo "git apply failed (conflicts). Resolve manually from patch in CI artifacts or re-run locally." >&2
+  echo "git apply failed (conflicts)." >&2
+  echo "Open ${WORKDIR}/private in your editor and resolve with git:" >&2
+  echo "  git -C \"${WORKDIR}/private\" status" >&2
+  echo "  # fix conflicts in files" >&2
+  echo "  git -C \"${WORKDIR}/private\" add -A" >&2
+  echo "  git -C \"${WORKDIR}/private\" commit -m \"sync(public): resolve conflicts ${BEFORE_SHA:0:7}..${AFTER_SHA:0:7}\"" >&2
+  echo "  git -C \"${WORKDIR}/private\" push -u origin \"HEAD:${SYNC_BRANCH}\"" >&2
   exit 2
 fi
 
