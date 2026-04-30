@@ -12,7 +12,7 @@
 # if you push to the canonical repo as maintainer.
 #
 # Env:
-#   COMMUNITY_FORK_REMOTE  required — git remote name for the fork (e.g. `fork`) or `upstream`
+#   COMMUNITY_FORK_REMOTE  optional — git remote name for the fork (e.g. `fork`) or `upstream`
 #   COMMUNITY_PUBLIC_REPO  default: Dinkimom/beer-tracker-community (owner/repo for gh)
 #   UPSTREAM_REMOTE        default: upstream — tracks canonical public main
 #   BASE_BRANCH            default: main
@@ -28,7 +28,10 @@
 #   COMMUNITY_PR_DIFF_PREVIEW_LINES=120  max lines of `git diff` preview printed before push
 #
 # Usage:
-#   COMMUNITY_FORK_REMOTE=fork ./scripts/sync-public-private/contribute-to-community.sh "PR title" [--from-current-branch] [--body-file PATH] [--dry-run]
+#   ./scripts/sync-public-private/contribute-to-community.sh ["PR title"] [--body-file PATH] [--dry-run]
+#   COMMUNITY_FORK_REMOTE=fork ./scripts/sync-public-private/contribute-to-community.sh "PR title" --from-current-branch
+# If title is omitted, the script uses the subject of the last commit.
+# Interactive prompts (title + confirm) are handled by `community-pr-cli.ts` (`pnpm community:pr`).
 #
 set -euo pipefail
 
@@ -37,11 +40,9 @@ while [[ "${1:-}" == "--" ]]; do
   shift
 done
 
-TITLE="${1:?Usage: $0 \"PR title\" [--body-file FILE | --from-current-branch]}"
-shift 1
-
+TITLE=""
 BODY_FILE=""
-FROM_CURRENT=0
+FROM_CURRENT=1
 DRY_RUN="${COMMUNITY_PR_DRY_RUN:-0}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,8 +59,13 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      echo "Unknown arg: $1" >&2
-      exit 1
+      if [[ -z "${TITLE}" ]]; then
+        TITLE="$1"
+        shift
+      else
+        echo "Unknown arg: $1" >&2
+        exit 1
+      fi
       ;;
   esac
 done
@@ -72,12 +78,24 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
 
+if [[ -z "${TITLE}" ]]; then
+  TITLE="$(git log -1 --pretty=%s 2>/dev/null || true)"
+fi
+if [[ -z "${TITLE}" ]]; then
+  echo "Could not resolve PR title. Pass it explicitly, e.g.:" >&2
+  echo "  pnpm community:pr -- \"feat: ...\"" >&2
+  exit 1
+fi
+
 FORK_REMOTE="${COMMUNITY_FORK_REMOTE:-${FORK_REMOTE:-}}"
 if [[ -z "${FORK_REMOTE}" ]]; then
-  echo "Set COMMUNITY_FORK_REMOTE to a git remote that points to your GitHub fork (push access), e.g.:" >&2
-  echo "  git remote add fork git@github.com:YOU/beer-tracker-community.git" >&2
-  echo "  COMMUNITY_FORK_REMOTE=fork pnpm community:pr -- \"fix: …\" --from-current-branch" >&2
-  exit 1
+  if git remote get-url fork >/dev/null 2>&1; then
+    FORK_REMOTE="fork"
+    echo "[community:pr] Using push remote 'fork' (auto: remote exists)." >&2
+  else
+    FORK_REMOTE="upstream"
+    echo "[community:pr] Using push remote '${FORK_REMOTE}' (auto: no 'fork' remote)." >&2
+  fi
 fi
 
 PUBLIC_REPO="${COMMUNITY_PUBLIC_REPO:-Dinkimom/beer-tracker-community}"
@@ -96,8 +114,38 @@ if ! git remote get-url "${UPSTREAM_REMOTE}" >/dev/null 2>&1; then
 fi
 
 if ! git remote get-url "${FORK_REMOTE}" >/dev/null 2>&1; then
-  echo "Remote '${FORK_REMOTE}' is not configured." >&2
-  exit 1
+  if [[ "${FORK_REMOTE}" == "fork" ]]; then
+    if ! command -v gh >/dev/null 2>&1; then
+      echo "Remote 'fork' is not configured and gh CLI is missing." >&2
+      echo "Install gh (https://cli.github.com/) or add fork manually:" >&2
+      echo "  git remote add fork git@github.com:YOU/beer-tracker-community.git" >&2
+      exit 1
+    fi
+
+    if ! gh auth status >/dev/null 2>&1; then
+      echo "Remote 'fork' is not configured and GitHub auth is missing." >&2
+      echo "Run: gh auth login" >&2
+      echo "Then retry community:pr (the script will auto-configure 'fork')." >&2
+      exit 1
+    fi
+
+    GH_LOGIN="$(gh api user -q .login 2>/dev/null || true)"
+    if [[ -z "${GH_LOGIN}" ]]; then
+      echo "Remote 'fork' is not configured and GitHub username could not be resolved from gh." >&2
+      echo "Run: gh auth login" >&2
+      echo "Or configure remote manually:" >&2
+      echo "  git remote add fork git@github.com:YOU/beer-tracker-community.git" >&2
+      exit 1
+    fi
+
+    git remote add fork "git@github.com:${GH_LOGIN}/beer-tracker-community.git"
+    echo "[community:pr] Auto-configured remote 'fork' -> git@github.com:${GH_LOGIN}/beer-tracker-community.git" >&2
+  else
+    echo "Remote '${FORK_REMOTE}' is not configured." >&2
+    echo "Add a GitHub fork, e.g.: git remote add fork git@github.com:YOU/beer-tracker-community.git" >&2
+    echo "Or set COMMUNITY_FORK_REMOTE to the remote name you push to." >&2
+    exit 1
+  fi
 fi
 
 if [[ "${DRY_RUN}" -eq 0 ]] && ! command -v gh >/dev/null 2>&1; then
@@ -137,13 +185,6 @@ FORK_OWNER="$(fork_owner_from_url "${FORK_URL}")"
 if [[ -z "${FORK_OWNER}" || "${FORK_OWNER}" == "${FORK_URL}" ]]; then
   echo "Could not parse GitHub owner from ${FORK_REMOTE} URL: ${FORK_URL}" >&2
   echo "Use an https://github.com/OWNER/... or git@github.com:OWNER/... remote." >&2
-  exit 1
-fi
-
-if [[ "${FROM_CURRENT}" -ne 1 ]]; then
-  echo "This wrapper only supports pushing your current work: add --from-current-branch." >&2
-  echo "Example:" >&2
-  echo "  COMMUNITY_FORK_REMOTE=fork pnpm community:pr -- \"fix: …\" --from-current-branch" >&2
   exit 1
 fi
 
