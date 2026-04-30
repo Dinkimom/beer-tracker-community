@@ -22,6 +22,8 @@
 #   PUBLIC_REPO_SLUG   e.g. acme/repo
 #   SYNC_ID            from contributor PR body
 #   UPSTREAM_PR_URL    merged public PR link
+# Patch shaping:
+#   SYNC_EXCLUDE_PATHS comma-separated pathspec excludes (default: OPEN_CORE_EXPORT_META.json)
 # Conflict/debug ergonomics:
 #   KEEP_WORKDIR_ON_ERROR=1   do not delete workdir on non-zero exit
 #   PRIVATE_SYNC_WORKDIR=PATH use explicit workdir path (reused/cleaned each run)
@@ -76,8 +78,26 @@ cleanup_workdir() {
 trap cleanup_workdir EXIT
 
 PATCH_FILE="${WORKDIR}/public-range.patch"
-
-git -C "${PUBLIC_DIR}" diff --binary "${BEFORE_SHA}" "${AFTER_SHA}" >"${PATCH_FILE}"
+SYNC_EXCLUDE_PATHS="${SYNC_EXCLUDE_PATHS:-OPEN_CORE_EXPORT_META.json}"
+DIFF_ARGS=(diff --binary "${BEFORE_SHA}" "${AFTER_SHA}")
+IFS=',' read -r -a EXCLUDE_LIST <<< "${SYNC_EXCLUDE_PATHS}"
+HAS_EXCLUDES=0
+for p in "${EXCLUDE_LIST[@]}"; do
+  p="${p#"${p%%[![:space:]]*}"}"
+  p="${p%"${p##*[![:space:]]}"}"
+  if [[ -n "${p}" ]]; then
+    HAS_EXCLUDES=1
+  fi
+done
+if [[ "${HAS_EXCLUDES}" -eq 1 ]]; then
+  DIFF_ARGS+=(-- .)
+  for p in "${EXCLUDE_LIST[@]}"; do
+    p="${p#"${p%%[![:space:]]*}"}"
+    p="${p%"${p##*[![:space:]]}"}"
+    [[ -n "${p}" ]] && DIFF_ARGS+=(":(exclude)${p}")
+  done
+fi
+git -C "${PUBLIC_DIR}" "${DIFF_ARGS[@]}" >"${PATCH_FILE}"
 
 if [[ ! -s "${PATCH_FILE}" ]]; then
   echo "Empty diff between ${BEFORE_SHA} and ${AFTER_SHA}; nothing to sync" >&2
@@ -121,14 +141,27 @@ fi
 git -C "${PRIVATE_DIR}" checkout -B "${SYNC_BRANCH}" "origin/${PRIVATE_TARGET_BRANCH}"
 
 if ! git -C "${PRIVATE_DIR}" apply --3way --index "${PATCH_FILE}"; then
-  echo "git apply failed (conflicts)." >&2
-  echo "Open ${PRIVATE_DIR} in your editor and resolve with git:" >&2
-  echo "  git -C \"${PRIVATE_DIR}\" status" >&2
-  echo "  # fix conflicts in files" >&2
-  echo "  git -C \"${PRIVATE_DIR}\" add -A" >&2
-  echo "  git -C \"${PRIVATE_DIR}\" commit -m \"sync(public): resolve conflicts ${BEFORE_SHA:0:7}..${AFTER_SHA:0:7}\"" >&2
-  echo "  git -C \"${PRIVATE_DIR}\" push -u origin \"HEAD:${SYNC_BRANCH}\"" >&2
-  exit 2
+  echo "Indexed apply failed; retrying conflict-friendly apply in working tree..." >&2
+  git -C "${PRIVATE_DIR}" reset --hard "origin/${PRIVATE_TARGET_BRANCH}" >/dev/null
+  if ! git -C "${PRIVATE_DIR}" apply --3way "${PATCH_FILE}"; then
+    if [[ -n "$(git -C "${PRIVATE_DIR}" ls-files -u)" ]] || ! git -C "${PRIVATE_DIR}" diff --quiet; then
+      echo "git apply left conflicts in working tree." >&2
+      echo "Open ${PRIVATE_DIR} in your editor and resolve with git:" >&2
+      echo "  git -C \"${PRIVATE_DIR}\" status" >&2
+      echo "  # fix conflicts in files" >&2
+      echo "  git -C \"${PRIVATE_DIR}\" add -A" >&2
+      echo "  git -C \"${PRIVATE_DIR}\" commit -m \"sync(public): resolve conflicts ${BEFORE_SHA:0:7}..${AFTER_SHA:0:7}\"" >&2
+      echo "  git -C \"${PRIVATE_DIR}\" push -u origin \"HEAD:${SYNC_BRANCH}\"" >&2
+      exit 2
+    fi
+    git -C "${PRIVATE_DIR}" apply --reject --whitespace=fix "${PATCH_FILE}" >/dev/null 2>&1 || true
+    echo "git apply failed; wrote reject hunks (*.rej)." >&2
+    echo "Open ${PRIVATE_DIR} and resolve using .rej files, then:" >&2
+    echo "  git -C \"${PRIVATE_DIR}\" add -A" >&2
+    echo "  git -C \"${PRIVATE_DIR}\" commit -m \"sync(public): resolve rejects ${BEFORE_SHA:0:7}..${AFTER_SHA:0:7}\"" >&2
+    echo "  git -C \"${PRIVATE_DIR}\" push -u origin \"HEAD:${SYNC_BRANCH}\"" >&2
+    exit 2
+  fi
 fi
 
 if git -C "${PRIVATE_DIR}" diff --quiet && git -C "${PRIVATE_DIR}" diff --cached --quiet; then
