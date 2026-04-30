@@ -100,7 +100,7 @@ export function SwimlaneFactFlexPhaseBar({
       singleInGroupId={statusTooltipId}
     >
       <div
-        className={`flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 transition-opacity pointer-events-auto cursor-pointer box-border ${bgClass} ${borderClass} ${isFactHovered ? 'opacity-100' : isDimmedByFactHover ? 'opacity-35' : 'opacity-60 hover:opacity-100'}`}
+        className={`flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 transition-[opacity,background-color,border-color,color] duration-[350ms] ease-out pointer-events-auto cursor-pointer box-border ${bgClass} ${borderClass} ${isFactHovered ? 'opacity-100' : isDimmedByFactHover ? 'opacity-35' : 'opacity-60 hover:opacity-100'}`}
         id={barDomId}
         style={{
           flex: `${widthInSpan} 0 0`,

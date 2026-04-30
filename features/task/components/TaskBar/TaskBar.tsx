@@ -6,7 +6,7 @@ import type { Task, Developer, TaskPosition } from '@/types';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import omit from 'lodash-es/omit';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { Icon } from '@/components/Icon';
 import { TextTooltip } from '@/components/TextTooltip';
@@ -124,6 +124,8 @@ export function TaskBar({
 }: TaskBarProps) {
   const { t } = useI18n();
   const [clickStartPos, setClickStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [isExpandedByLongHover, setIsExpandedByLongHover] = useState(false);
+  const longHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resize = useTaskBarResize({
     duration,
@@ -153,12 +155,27 @@ export function TaskBar({
   const displayLeftPercent = resize.isResizing && resize.resizePreviewStartCell !== null
     ? (resize.resizePreviewStartCell / swimlaneTimelineTotalParts) * 100
     : leftPercent;
+  const longHoverExpandMaxDurationPartsInclusive = 5;
+  const isNarrowForLongHoverExpand =
+    (swimlaneBarDurationParts ?? duration) <= longHoverExpandMaxDurationPartsInclusive;
+  const shouldExpandByLongHover =
+    isExpandedByLongHover &&
+    isNarrowForLongHoverExpand &&
+    !effectiveIsDragging &&
+    !resize.isResizing;
+  const expandedMinDurationParts = 4;
+  const expandedMinWidthPercent =
+    (expandedMinDurationParts / swimlaneTimelineTotalParts) * 100;
+  const expandedWidthPercent = Math.max(displayWidthPercent, expandedMinWidthPercent);
+  const baseWidthCss = `calc(${displayWidthPercent}% - ${CARD_MARGIN * 2}px)`;
+  const expandedWidthCss = `calc(${expandedWidthPercent}% - ${CARD_MARGIN * 2}px)`;
 
   const customStyleLayout = omit(customStyle ?? {}, ['opacity', 'transition']);
   const layoutStyle = {
     left: `calc(${displayLeftPercent}% + ${CARD_MARGIN}px)`,
-    width: `calc(${displayWidthPercent}% - ${CARD_MARGIN * 2}px)`,
+    width: shouldExpandByLongHover ? expandedWidthCss : baseWidthCss,
     transform: CSS.Translate.toString(transform),
+    transition: 'width 0.2s ease',
     ...customStyleLayout,
   };
 
@@ -170,6 +187,24 @@ export function TaskBar({
       return () => clearTimeout(timeoutId);
     }
   }, [leftPercent, widthPercent, effectiveIsDragging, requestArrowRedraw]);
+
+  useEffect(() => {
+    if (!effectiveIsDragging) return;
+    if (longHoverTimeoutRef.current) {
+      clearTimeout(longHoverTimeoutRef.current);
+      longHoverTimeoutRef.current = null;
+    }
+    setIsExpandedByLongHover(false);
+  }, [effectiveIsDragging]);
+
+  useEffect(() => {
+    return () => {
+      if (longHoverTimeoutRef.current) {
+        clearTimeout(longHoverTimeoutRef.current);
+        longHoverTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const isQATask = isEffectivelyQaTask(task);
 
@@ -204,13 +239,18 @@ export function TaskBar({
   let taskBarZIndex: number = ZIndex.stickyInContent;
   if (effectiveIsDragging) {
     taskBarZIndex = ZIndex.dragPreview;
+  } else if (shouldExpandByLongHover) {
+    // Keep expanded card below sticky assignee column.
+    taskBarZIndex = ZIndex.arrowsHovered;
   } else if (isInError) {
     taskBarZIndex = ZIndex.stickyElevated;
   }
 
   return (
     <div
-      className={`absolute top-1.5 bottom-1.5 ${
+      className={`task-bar-item absolute top-1.5 bottom-1.5 ${
+        shouldExpandByLongHover ? 'task-bar-expanded' : ''
+      } ${
         interactionDisabled || effectiveIsDragging ? 'pointer-events-none' : 'pointer-events-auto'
       }`}
       data-draggable-id={draggableId}
@@ -263,11 +303,28 @@ export function TaskBar({
               }
             }}
             onMouseEnter={() => {
+              if (
+                isNarrowForLongHoverExpand &&
+                !effectiveIsDragging &&
+                !resize.isResizing
+              ) {
+                if (longHoverTimeoutRef.current) {
+                  clearTimeout(longHoverTimeoutRef.current);
+                }
+                longHoverTimeoutRef.current = setTimeout(() => {
+                  setIsExpandedByLongHover(true);
+                }, 1000);
+              }
               if (!effectiveIsDragging && !resize.isResizing && onTaskHover) {
                 onTaskHover(task.id);
               }
             }}
             onMouseLeave={() => {
+              if (longHoverTimeoutRef.current) {
+                clearTimeout(longHoverTimeoutRef.current);
+                longHoverTimeoutRef.current = null;
+              }
+              setIsExpandedByLongHover(false);
               if (!effectiveIsDragging && !resize.isResizing && onTaskHover) {
                 onTaskHover(null);
               }

@@ -97,7 +97,7 @@ export function SwimlaneClosedFactMarker({
       >
         <div
           aria-label={`${phase.statusKey}: закрыто`}
-          className={`pointer-events-auto flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 shadow-sm transition-opacity cursor-pointer box-border ${bgClass} ${borderClass} ${isFactHovered ? 'opacity-100' : isDimmedByFactHover ? 'opacity-35' : 'opacity-60 hover:opacity-100'}`}
+          className={`pointer-events-auto flex shrink-0 items-center justify-center rounded-md overflow-hidden border-2 shadow-sm transition-[opacity,background-color,border-color,color] duration-[350ms] ease-out cursor-pointer box-border ${bgClass} ${borderClass} ${isFactHovered ? 'opacity-100' : isDimmedByFactHover ? 'opacity-35' : 'opacity-60 hover:opacity-100'}`}
           id={barDomId}
           role="img"
           style={{

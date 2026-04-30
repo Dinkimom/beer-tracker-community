@@ -24,7 +24,7 @@ export function TaskLayer(props: TaskLayerProps) {
 
   return (
     <div
-      className="absolute top-0 left-0 right-0 pointer-events-none"
+      className="task-layer-row absolute top-0 left-0 right-0 pointer-events-none"
       style={{ height: `${rest.totalHeight}px` }}
     >
       {positionedTasks.map(({ task, position }) => (

@@ -21,8 +21,9 @@
     "open-core:export": "tsx scripts/open-core/build-community-core-export.ts",
     "open-core:publish": "bash scripts/open-core/publish-community-core.sh",
     "sync:from-community": "bash scripts/sync-public-private/npm-community-sync.sh",
+    "community:prepare": "bash scripts/sync-public-private/prepare-community-branch.sh",
     "version:bump": "bash scripts/release/bump-version.sh",
-    "community:pr": "bash scripts/sync-public-private/contribute-to-community.sh",
+    "community:pr": "tsx scripts/sync-public-private/community-pr-cli.ts",
     "test": "vitest run && pnpm check:i18n",
     "test:watch": "vitest",
     "prepare": "husky",
@@ -65,6 +66,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@inquirer/prompts": "^8.4.2",
     "@next/eslint-plugin-next": "^16.0.10",
     "@storybook/addon-a11y": "^10.3.4",
     "@storybook/addon-docs": "^10.3.4",
