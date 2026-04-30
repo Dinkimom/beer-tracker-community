@@ -288,7 +288,6 @@ export function Swimlane({
                 swimlaneRowTaskIds={swimlaneRowTaskIds}
                 tasksMap={tasksMap}
                 factHoveredTaskId={factHoveredTaskId}
-                hoveredTaskId={hoveredTaskId}
                 onFactSegmentHover={onFactSegmentHover}
               />
             )}
