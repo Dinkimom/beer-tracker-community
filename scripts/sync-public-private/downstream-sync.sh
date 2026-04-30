@@ -120,7 +120,7 @@ fi
 
 git -C "${PRIVATE_DIR}" checkout -B "${SYNC_BRANCH}" "origin/${PRIVATE_TARGET_BRANCH}"
 
-if ! git -C "${PRIVATE_DIR}" apply --3way "${PATCH_FILE}"; then
+if ! git -C "${PRIVATE_DIR}" apply --3way --index "${PATCH_FILE}"; then
   echo "git apply failed (conflicts)." >&2
   echo "Open ${PRIVATE_DIR} in your editor and resolve with git:" >&2
   echo "  git -C \"${PRIVATE_DIR}\" status" >&2
