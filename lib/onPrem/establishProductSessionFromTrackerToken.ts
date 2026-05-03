@@ -1,13 +1,15 @@
 import { canUsePlanner, resolveAccessProfile } from '@/lib/access/orgAccess';
 import { findUserByEmail } from '@/lib/auth';
-import { findStaffByTrackerUserId } from '@/lib/staffTeams';
 import { createTrackerApiClient } from '@/lib/tracker-client';
 import {
   resolveTrackerCloudContextForProductOrganizationIdOnPrem,
   TrackerApiConfigError,
 } from '@/lib/trackerRequestConfig';
 
-import { staffHasTeamMembershipInOrganization } from './staffTeamAccess';
+import {
+  findRegistryEmployeeForTrackerSession,
+  registryStaffUidHasOverseerTeam,
+} from './registryEmployeeTrackerSessionLookup';
 import { trackerIdentityCandidatesFromMyself } from './trackerMyselfIdentity';
 
 /**
@@ -36,29 +38,29 @@ export async function resolveProductUserIdForOnPremTrackerSession(input: {
   }
 
   const candidates = trackerIdentityCandidatesFromMyself(myself);
-  let staff: Awaited<ReturnType<typeof findStaffByTrackerUserId>> = null;
+  let registryEmployee: Awaited<ReturnType<typeof findRegistryEmployeeForTrackerSession>> = null;
   for (const c of candidates) {
-    staff = await findStaffByTrackerUserId(input.organizationProductId, c);
-    if (staff) {
+    registryEmployee = await findRegistryEmployeeForTrackerSession(c);
+    if (registryEmployee) {
       break;
     }
   }
 
-  if (!staff) {
+  if (!registryEmployee) {
     throw new TrackerApiConfigError(
       'Пользователь не найден в реестре организации. Попросите администратора добавить вас в команду.',
       403
     );
   }
 
-  if (!(await staffHasTeamMembershipInOrganization(input.organizationProductId, staff.id))) {
+  if (!(await registryStaffUidHasOverseerTeam(registryEmployee.staffUid))) {
     throw new TrackerApiConfigError(
       'Нет доступа к планеру: сотрудник не назначен в команду.',
       403
     );
   }
 
-  const emailNorm = staff.email?.trim().toLowerCase();
+  const emailNorm = registryEmployee.email?.trim().toLowerCase();
   if (!emailNorm) {
     throw new TrackerApiConfigError('У сотрудника в реестре не задан email.', 422);
   }
