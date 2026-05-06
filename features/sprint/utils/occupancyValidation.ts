@@ -8,7 +8,9 @@
  */
 
 import type { Task, TaskPosition } from '@/types';
-import type { TechSprintEntry, VacationEntry } from '@/types/quarterly';
+import type { QuarterlyAvailability } from '@/types/quarterly';
+
+import { normalizeQuarterlyAvailabilityToBoardEvents } from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
 
 import { PARTS_PER_DAY, WORKING_DAYS } from '@/constants';
 import { isTaskCompleted } from '@/features/task/utils/taskUtils';
@@ -61,7 +63,10 @@ function parseIsoDateOnlyUtc(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
 }
 
-function dayOverlapsEntry(dayDate: Date, entry: TechSprintEntry | VacationEntry): boolean {
+function dayOverlapsEntry(
+  dayDate: Date,
+  entry: { endDate: string; startDate: string }
+): boolean {
   const dayStart = new Date(dayDate);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayDate);
@@ -74,21 +79,23 @@ function dayOverlapsEntry(dayDate: Date, entry: TechSprintEntry | VacationEntry)
 }
 
 /**
- * Строит карту: assigneeId → множество индексов дней (0..9), когда исполнитель в отпуске или техспринте.
- * Используется для валидации «не назначать задачу на исполнителя в отпуске/техспринте».
+ * Строит карту: assigneeId → множество индексов дней (0..9), когда исполнитель недоступен
+ * (отпуск, техспринт, больничный, дежурство и т.д. по данным {@link QuarterlyAvailability}).
  */
 export function buildAssigneeUnavailableDays(
-  availability: { vacations: VacationEntry[]; techSprints: TechSprintEntry[] } | null | undefined,
+  availability: QuarterlyAvailability | null | undefined,
   sprintStartDate: Date,
   workingDaysCount: number = WORKING_DAYS
 ): AssigneeUnavailableDays {
   const map = new Map<string, Set<number>>();
   if (!availability) return map;
 
+  const events = normalizeQuarterlyAvailabilityToBoardEvents(availability);
+
   const count = Math.max(1, workingDaysCount);
   const workingDays = getWorkingDaysRange(sprintStartDate, count);
 
-  const addUnavailableDays = (memberId: string, entry: TechSprintEntry | VacationEntry) => {
+  const addUnavailableDays = (memberId: string, entry: { endDate: string; startDate: string }) => {
     const days = map.get(memberId) ?? new Set<number>();
     for (let dayIndex = 0; dayIndex < workingDays.length; dayIndex++) {
       if (dayOverlapsEntry(workingDays[dayIndex]!, entry)) {
@@ -98,8 +105,7 @@ export function buildAssigneeUnavailableDays(
     map.set(memberId, days);
   };
 
-  availability.vacations.forEach((entry) => addUnavailableDays(entry.memberId, entry));
-  availability.techSprints.forEach((entry) => addUnavailableDays(entry.memberId, entry));
+  events.forEach((e) => addUnavailableDays(e.memberId, e));
 
   return map;
 }

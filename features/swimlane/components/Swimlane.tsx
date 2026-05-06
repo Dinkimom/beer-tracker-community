@@ -7,17 +7,18 @@ import type { ChangelogEntry, IssueComment } from '@/types/tracker';
 import { useDroppable } from '@dnd-kit/core';
 import React, { useContext, useMemo } from 'react';
 
+import { getAvatarVariantForDeveloper, type AvatarInitialsVariant } from '@/components/Avatar';
 import { PARTS_PER_DAY, WORKING_DAYS } from '@/constants';
 import { CommentCard } from '@/features/comments/components/CommentCard';
 import { sprintPlannerSwimlaneTimelineWidthCss } from '@/features/sprint/components/SprintPlanner/layout/sprintPlannerSwimlaneLayoutWidths';
 import { AvailabilityCardsLayer } from '@/features/swimlane/components/AvailabilityCardsLayer';
+import { BoardAvailabilityModal } from '@/features/swimlane/components/BoardAvailabilityModal';
 import { DeveloperHeader } from '@/features/swimlane/components/DeveloperHeader';
 import { DeveloperVacationsMenu } from '@/features/swimlane/components/DeveloperVacationsMenu';
 import { SwimlaneInProgressFactLayer } from '@/features/swimlane/components/in-progress-fact';
 import { memoizedSwimlanePropsEqual } from '@/features/swimlane/components/memoizedSwimlanePropsEqual';
 import { TaskLayer } from '@/features/swimlane/components/TaskLayer';
 import { TimelineGrid } from '@/features/swimlane/components/TimelineGrid';
-import { VacationsModal } from '@/features/swimlane/components/VacationsModal';
 import { useSwimlaneDocumentDarkClass } from '@/features/swimlane/hooks/in-progress-fact/useSwimlaneDocumentDarkClass';
 import { useSwimlaneLayout } from '@/features/swimlane/hooks/useSwimlaneLayout';
 import { getSwimlaneInProgressFactLayerHeightPx } from '@/features/swimlane/utils/mergeInProgressDurationsForAssignee';
@@ -30,8 +31,10 @@ const EMPTY_SWIMLANE_FACT_DEVELOPERS = new Map<string, Developer>();
 
 export type { SwimlaneProps } from '@/features/swimlane/components/SwimlaneProps';
 
-interface VacationsModalState {
+interface AvailabilityModalState {
+  avatarUrl?: string | null;
   boardId: number;
+  initialsVariant?: AvatarInitialsVariant;
   memberId: string;
   memberName: string;
 }
@@ -90,7 +93,7 @@ export function Swimlane({
   onSegmentEditSave,
 }: SwimlaneProps) {
   const requestArrowRedraw = useContext(SwimlaneArrowRedrawContext) ?? (() => {});
-  const [vacationsModal, setVacationsModal] = React.useState<VacationsModalState | null>(null);
+  const [availabilityModal, setAvailabilityModal] = React.useState<AvailabilityModalState | null>(null);
 
   const { setNodeRef } = useDroppable({
     id: `swimlane-${developer.id}`,
@@ -122,8 +125,7 @@ export function Swimlane({
       ? getSwimlaneInProgressFactLayerHeightPx(swimlaneInProgressDurations)
       : 0;
   const availabilityVisible = Boolean(
-    developerAvailability &&
-      (developerAvailability.vacations.length > 0 || developerAvailability.techSprints.length > 0)
+    developerAvailability && developerAvailability.boardEvents.length > 0
   );
   const availabilityLaneHeightPx = availabilityVisible ? 48 : 0;
   const mainAreaHeight = layout.totalHeight + factExtra;
@@ -168,7 +170,13 @@ export function Swimlane({
               boardId={boardId}
               memberId={developer.id}
               memberName={developer.name}
-              onEditVacations={(args) => setVacationsModal(args)}
+              onEditAvailability={(args) =>
+                setAvailabilityModal({
+                  ...args,
+                  avatarUrl: developer.avatarUrl,
+                  initialsVariant: getAvatarVariantForDeveloper(developer),
+                })
+              }
             />
           }
           avatarUrl={developer.avatarUrl}
@@ -301,25 +309,26 @@ export function Swimlane({
               style={{ top: mainAreaHeight, height: availabilityLaneHeightPx }}
             >
               <AvailabilityCardsLayer
+                boardEvents={developerAvailability?.boardEvents ?? []}
                 developerId={developer.id}
                 participantsColumnWidth={participantsColumnWidth}
                 sprintStartDate={sprintStartDate}
-                techSprints={developerAvailability?.techSprints ?? []}
                 totalHeight={availabilityLaneHeightPx}
-                vacations={developerAvailability?.vacations ?? []}
               />
             </div>
           ) : null}
 
         </div>
       </div>
-      {vacationsModal ? (
-        <VacationsModal
-          boardId={vacationsModal.boardId}
+      {availabilityModal ? (
+        <BoardAvailabilityModal
+          boardId={availabilityModal.boardId}
           isOpen={true}
-          memberId={vacationsModal.memberId}
-          memberName={vacationsModal.memberName}
-          onClose={() => setVacationsModal(null)}
+          memberAvatarUrl={availabilityModal.avatarUrl}
+          memberId={availabilityModal.memberId}
+          memberInitialsVariant={availabilityModal.initialsVariant}
+          memberName={availabilityModal.memberName}
+          onClose={() => setAvailabilityModal(null)}
         />
       ) : null}
     </div>

@@ -1,16 +1,11 @@
 import type { Task } from '@/types';
 
-import { v5 as uuidv5 } from 'uuid';
-
 import { isQaOnlyTask } from '@/features/task/utils/taskUtils';
+import { buildSyntheticQaTaskId } from '@/lib/qaTaskIdentity';
 
 import { mapDevStatusToQAStatus } from './qaStatusMapper';
 
-const QA_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'; // Стандартный namespace для UUID v5
-
-export function buildSyntheticQaTaskId(devTaskId: string): string {
-  return uuidv5(`qa-${devTaskId}`, QA_NAMESPACE);
-}
+export { buildSyntheticQaTaskId };
 
 /**
  * Создает словарь QA задач из обычных задач

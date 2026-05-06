@@ -28,6 +28,18 @@ const icons: Record<string, React.ReactNode> = {
   'arrow-left': (
     <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
   ),
+  'undo': (
+    <>
+      <path d="M9 14 4 9l5-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+      <path d="M4 9h10.5a5.5 5.5 0 1 1 0 11H11" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    </>
+  ),
+  'redo': (
+    <>
+      <path d="m15 14 5-5-5-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+      <path d="M20 9H9.5a5.5 5.5 0 1 0 0 11H13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    </>
+  ),
 
   // Действия
   'plus': (
@@ -43,6 +55,10 @@ const icons: Record<string, React.ReactNode> = {
     <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
   ),
   'x': (
+    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+  ),
+  /** Алиас к `x` — в UI часто семантически «закрыть» */
+  close: (
     <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
   ),
   'grip-vertical': (

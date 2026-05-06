@@ -28,7 +28,7 @@ interface PublicRegistryRow {
   name: string | null;
   patronymic: string | null;
   surname: string | null;
-  tracker_id: string | null;
+  tracker_id: string | number | null;
   uuid: string;
 }
 
@@ -62,13 +62,13 @@ function splitDisplayName(displayName: string): { firstName: string; lastName: s
 }
 
 function displayNameFromPublicRegistry(row: PublicRegistryRow): string {
-  const last = row.last_name ?? row.surname ?? '';
-  const first = row.first_name ?? row.name ?? '';
-  const middle = row.middle_name ?? row.patronymic ?? '';
-  const parts = [last, first, middle]
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return parts.join(' ').trim();
+  const last = (row.last_name ?? row.surname ?? '').trim();
+  const first = (row.first_name ?? row.name ?? '').trim();
+  // Для UI отображаем "Имя Фамилия" без отчества (middle/patronymic).
+  if (first && last) return `${first} ${last}`;
+  if (last) return last;
+  if (first) return first;
+  return '';
 }
 
 function normalizeBirthdate(value: Date | string | null): string | null {
@@ -80,30 +80,11 @@ function normalizeBirthdate(value: Date | string | null): string | null {
 function publicRegistryToItem(row: PublicRegistryRow): StaffRegistryItem {
   const displayName = displayNameFromPublicRegistry(row);
   return {
-    trackerId: (row.tracker_id ?? row.uuid).trim() || row.uuid,
+    trackerId: String(row.tracker_id ?? row.uuid).trim() || row.uuid,
     displayName: displayName || row.uuid,
     avatarUrl: row.avatar_link ?? null,
     birthdate: normalizeBirthdate(row.birthdate),
     email: null,
-  };
-}
-
-function staffRowToRegistryItem(row: {
-  display_name: string;
-  email: string | null;
-  manual_override_flags: Record<string, unknown> | null;
-  tracker_user_id: string | null;
-}): StaffRegistryItem | null {
-  if (!row.tracker_user_id) {
-    return null;
-  }
-  const flags = row.manual_override_flags;
-  return {
-    trackerId: row.tracker_user_id,
-    displayName: row.display_name,
-    email: row.email ?? null,
-    avatarUrl: manualFlagString(flags, 'avatarUrl'),
-    birthdate: manualFlagString(flags, 'birthdate'),
   };
 }
 
@@ -331,97 +312,63 @@ export async function searchStaffInOrg(
     return [];
   }
   const pattern = `%${q.replace(/%/g, '\\%')}%`;
-  if (canReadRegistryFromPublicSchema()) {
-    const registryRes = await query<PublicRegistryRow>(
-      `SELECT
-          uuid,
-          tracker_id,
-          name,
-          surname,
-          patronymic,
-          NULL::text AS first_name,
-          NULL::text AS last_name,
-          NULL::text AS middle_name,
-          avatar_link,
-          birthdate
-       FROM public.registry_employees
-       WHERE (
-         coalesce(surname, '') ILIKE $1
-         OR coalesce(name, '') ILIKE $1
-         OR coalesce(patronymic, '') ILIKE $1
-         OR coalesce(fullname, '') ILIKE $1
-       )
-       ORDER BY surname ASC NULLS LAST, name ASC NULLS LAST
-       LIMIT 30`,
-      [pattern]
-    );
-    if (registryRes.rows.length > 0) {
-      return registryRes.rows.map(publicRegistryToItem);
-    }
+  void organizationId; // поиск идёт по registry_employees (public), не по tenant staff
+  if (!canReadRegistryFromPublicSchema()) {
+    return [];
   }
-  const res = await query<{
-    display_name: string;
-    email: string | null;
-    manual_override_flags: Record<string, unknown> | null;
-    tracker_user_id: string | null;
-  }>(
-    `SELECT tracker_user_id, display_name, email, manual_override_flags
-     FROM staff
-     WHERE organization_id = $1
-       AND tracker_user_id IS NOT NULL
-       AND (
-         display_name ILIKE $2
-         OR COALESCE(email, '') ILIKE $2
-       )
-     ORDER BY display_name ASC
+  const registryRes = await query<PublicRegistryRow>(
+    `SELECT
+        uuid,
+        tracker_id,
+        name,
+        surname,
+        patronymic,
+        NULL::text AS first_name,
+        NULL::text AS last_name,
+        NULL::text AS middle_name,
+        avatar_link,
+        birthdate
+     FROM public.registry_employees
+     WHERE (
+       coalesce(surname, '') ILIKE $1
+       OR coalesce(name, '') ILIKE $1
+       OR coalesce(patronymic, '') ILIKE $1
+       OR coalesce(fullname, '') ILIKE $1
+     )
+     ORDER BY surname ASC NULLS LAST, name ASC NULLS LAST
      LIMIT 30`,
-    [organizationId, pattern]
+    [pattern]
   );
-  return res.rows
-    .map(staffRowToRegistryItem)
-    .filter((x): x is StaffRegistryItem => x !== null);
+  return registryRes.rows.map(publicRegistryToItem);
 }
 
 export async function getStaffByTrackerUserIdInOrg(
   organizationId: string,
   trackerUserId: string
 ): Promise<StaffRegistryItem | null> {
-  if (canReadRegistryFromPublicSchema()) {
-    const registryRes = await query<PublicRegistryRow>(
-      `SELECT
-          uuid,
-          tracker_id,
-          name,
-          surname,
-          patronymic,
-          NULL::text AS first_name,
-          NULL::text AS last_name,
-          NULL::text AS middle_name,
-          avatar_link,
-          birthdate
-       FROM public.registry_employees
-       WHERE tracker_id = $1 OR uuid::text = $1
-       LIMIT 1`,
-      [trackerUserId]
-    );
-    const registryRow = registryRes.rows[0];
-    if (registryRow) {
-      return publicRegistryToItem(registryRow);
-    }
+  void organizationId; // данные берём из registry_employees (public), не из tenant staff
+  if (!canReadRegistryFromPublicSchema()) {
+    return null;
   }
-  const res = await query<{
-    display_name: string;
-    email: string | null;
-    manual_override_flags: Record<string, unknown> | null;
-    tracker_user_id: string | null;
-  }>(
-    `SELECT tracker_user_id, display_name, email, manual_override_flags
-     FROM staff
-     WHERE organization_id = $1 AND tracker_user_id = $2`,
-    [organizationId, trackerUserId]
+  const registryRes = await query<PublicRegistryRow>(
+    `SELECT
+        uuid,
+        tracker_id,
+        name,
+        surname,
+        patronymic,
+        NULL::text AS first_name,
+        NULL::text AS last_name,
+        NULL::text AS middle_name,
+        avatar_link,
+        birthdate
+     FROM public.registry_employees
+     WHERE tracker_id::text = $1 OR uuid::text = $1
+     LIMIT 1`,
+    [trackerUserId]
   );
-  const row = res.rows[0];
-  return row ? staffRowToRegistryItem(row) : null;
+  const registryRow = registryRes.rows[0];
+  return registryRow ? publicRegistryToItem(registryRow) : null;
 }
 
 export async function getStaffByTrackerUserIdsInOrg(
@@ -444,26 +391,14 @@ export async function getStaffByTrackerUserIdsInOrg(
           NULL::text AS middle_name,
           avatar_link,
           birthdate
-       FROM public.registry_employees
-       WHERE tracker_id = ANY($1::text[]) OR uuid::text = ANY($1::text[])`,
+      FROM public.registry_employees
+      WHERE tracker_id::text = ANY($1::text[]) OR uuid::text = ANY($1::text[])`,
       [trackerUserIds]
     );
     if (registryRes.rows.length > 0) {
       return registryRes.rows.map(publicRegistryToItem);
     }
   }
-  const res = await query<{
-    display_name: string;
-    email: string | null;
-    manual_override_flags: Record<string, unknown> | null;
-    tracker_user_id: string | null;
-  }>(
-    `SELECT tracker_user_id, display_name, email, manual_override_flags
-     FROM staff
-     WHERE organization_id = $1 AND tracker_user_id = ANY($2::text[])`,
-    [organizationId, trackerUserIds]
-  );
-  return res.rows
-    .map(staffRowToRegistryItem)
-    .filter((x): x is StaffRegistryItem => x !== null);
+  void organizationId; // staff fallback запрещен, если нет доступа к public.registry_employees
+  return [];
 }

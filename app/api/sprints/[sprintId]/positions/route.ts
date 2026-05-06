@@ -11,6 +11,7 @@ import { updateIssueAssignee } from '@/lib/trackerApi';
 import { loadTrackerIntegrationForTrackerPatch } from '@/lib/trackerIntegration';
 import { buildIssueAssigneePatch } from '@/lib/trackerIntegration/buildIssueAssigneePatch';
 import { TaskPositionSchema, formatValidationError, validateRequest } from '@/lib/validation';
+import { syncPlannedDatesToTracker } from './plannedDateSync';
 
 export async function GET(
   request: NextRequest,
@@ -226,6 +227,24 @@ export async function POST(
       }
     }
 
+    // Синхронизируем запланированные даты в Tracker.
+    // Для issue PATCH используем deadline (конец) и start (начало); если start не поддержан
+    // конкретной очередью/типом, fallback — обновляем хотя бы deadline.
+    if (plannedStartDay != null && plannedStartPart != null) {
+      try {
+        await syncPlannedDatesToTracker({
+          organizationId,
+          positions: [
+            { devTaskKey, duration, isQa, plannedDuration, plannedStartDay, plannedStartPart, segments, taskId },
+          ],
+          request,
+          sprintId,
+        });
+      } catch (err) {
+        console.error('[sync planned dates → tracker] POST /sprints/.../positions', err);
+      }
+    }
+
     return NextResponse.json({ position: result.rows[0] });
   } catch (error) {
     return handleApiError(error, 'save position', {
@@ -278,6 +297,13 @@ export async function PUT(
         : [assigneeId, startDay, startPart, duration, plannedStartDay, plannedStartPart, plannedDuration, organizationId, sprintId, taskId]
     );
 
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Position not found' },
+        { status: 404 }
+      );
+    }
+
     // Синхронизируем исполнителя в Трекере при изменении (assignee для dev, qaEngineer на dev-задаче для QA)
     if (result.rows.length > 0 && assigneeId != null) {
       const trackerAssigneeId = await resolvePlannerAssigneeIdForTrackerSync(organizationId, assigneeId);
@@ -295,11 +321,21 @@ export async function PUT(
       }
     }
 
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { error: 'Position not found' },
-        { status: 404 }
-      );
+    // Синхронизируем запланированные даты в Tracker.
+    if (plannedStartDay != null && plannedStartPart != null) {
+      try {
+        const isQa = result.rows[0]?.is_qa ?? false;
+        await syncPlannedDatesToTracker({
+          organizationId,
+          positions: [
+            { devTaskKey, duration, isQa, plannedDuration, plannedStartDay, plannedStartPart, taskId },
+          ],
+          request,
+          sprintId,
+        });
+      } catch (err) {
+        console.error('[sync planned dates → tracker] PUT /sprints/.../positions', err);
+      }
     }
 
     return NextResponse.json({ position: result.rows[0] });

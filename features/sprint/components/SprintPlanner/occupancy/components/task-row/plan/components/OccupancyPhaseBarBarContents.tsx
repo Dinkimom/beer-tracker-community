@@ -46,6 +46,8 @@ interface OccupancyPhaseBarBarContentsProps {
   qaStripedStyle?: CSSProperties;
   readonly: boolean;
   resizeSide: 'left' | 'right' | null;
+  segmentEndAnchorId?: string;
+  segmentStartAnchorId?: string;
   showEndAnchor: boolean;
   showExtraPlanDuration: boolean;
   showStartAnchor: boolean;
@@ -87,6 +89,8 @@ export function OccupancyPhaseBarBarContents(props: OccupancyPhaseBarBarContents
     setHoverRight,
     qaStripedStyle,
     qaBaseColor,
+    segmentEndAnchorId,
+    segmentStartAnchorId,
   } = props;
 
   return (
@@ -244,6 +248,26 @@ export function OccupancyPhaseBarBarContents(props: OccupancyPhaseBarBarContents
         <div
           className="pointer-events-none"
           id={`occupancy-end-${taskId}`}
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 1,
+          }}
+        />
+      )}
+      {segmentStartAnchorId && (
+        <div
+          className="pointer-events-none"
+          id={segmentStartAnchorId}
+          style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 1 }}
+        />
+      )}
+      {segmentEndAnchorId && (
+        <div
+          className="pointer-events-none"
+          id={segmentEndAnchorId}
           style={{
             position: 'absolute',
             right: 0,

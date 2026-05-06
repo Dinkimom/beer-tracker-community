@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import type { SprintInfo } from '@/types/tracker';
+
+import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/Button';
 import { useConfirmDialog } from '@/components/ConfirmDialog';
@@ -12,11 +15,14 @@ import { SprintStartChecklist } from '@/features/sidebar/components/SprintStartC
 import { useTaskSidebar } from '@/features/sidebar/contexts/TaskSidebarContext';
 import { useGoalsTab } from '@/features/sidebar/hooks/useGoalsTab';
 import { FinishSprintModal } from '@/features/sprint/components/FinishSprintModal';
+import { patchSprintInSprintsQueries } from '@/features/sprint/hooks/useSprints';
 import { calculateSprintStartChecks } from '@/features/sprint/utils/sprintStartChecks';
+import { patchSprintInfoInTasksQueries } from '@/features/task/hooks/useTasks';
 import { updateSprintStatus } from '@/lib/beerTrackerApi';
 
 export function GoalsTab() {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const {
     canEdit,
     deliveryChecklistItems,
@@ -64,6 +70,11 @@ export function GoalsTab() {
 
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [showFinishSprintModal, setShowFinishSprintModal] = useState(false);
+
+  const handleSprintStatusUpdated = useCallback((updatedSprint: SprintInfo) => {
+    patchSprintInfoInTasksQueries(queryClient, updatedSprint);
+    patchSprintInSprintsQueries(queryClient, updatedSprint);
+  }, [queryClient]);
 
   const handleFinishSprint = () => {
     setShowFinishSprintModal(true);
@@ -120,6 +131,9 @@ export function GoalsTab() {
       }
 
       toast.success(t('sidebar.goalsTab.sprintStarted'));
+      if (result.sprint) {
+        handleSprintStatusUpdated(result.sprint);
+      }
 
       if (onTasksReload) {
         onTasksReload();
@@ -147,7 +161,7 @@ export function GoalsTab() {
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {t('sidebar.goalsTab.deliveryGoalsHeading')}
               </h2>
-              {canEdit && !deliveryGoalsTab.newGoalId && deliveryChecklistItems.length === 0 && (
+              {canEdit && !deliveryGoalsTab.newGoalId && !deliveryGoalsTab.editingId && deliveryChecklistItems.length === 0 && (
                 <HeaderIconButton
                   aria-label={t('sidebar.goalsTab.addGoalAria')}
                   className="h-7 w-7"
@@ -178,7 +192,7 @@ export function GoalsTab() {
                 onTextChange={deliveryGoalsTab.setEditingText}
               />
             </div>
-            {canEdit && !deliveryGoalsTab.newGoalId && deliveryChecklistItems.length > 0 && (
+            {canEdit && !deliveryGoalsTab.newGoalId && !deliveryGoalsTab.editingId && deliveryChecklistItems.length > 0 && (
               <div className="px-4 pb-2 pt-1 flex-shrink-0">
                 <Button
                   className="-mx-1.5 -my-0.5 h-auto min-h-0 gap-1.5 px-1.5 py-0.5 text-sm font-normal text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-100"
@@ -197,7 +211,7 @@ export function GoalsTab() {
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {t('sidebar.goalsTab.discoveryGoalsHeading')}
               </h2>
-              {canEdit && !discoveryGoalsTab.newGoalId && discoveryChecklistItems.length === 0 && (
+              {canEdit && !discoveryGoalsTab.newGoalId && !discoveryGoalsTab.editingId && discoveryChecklistItems.length === 0 && (
                 <HeaderIconButton
                   aria-label={t('sidebar.goalsTab.addGoalAria')}
                   className="h-7 w-7"
@@ -228,7 +242,7 @@ export function GoalsTab() {
                 onTextChange={discoveryGoalsTab.setEditingText}
               />
             </div>
-            {canEdit && !discoveryGoalsTab.newGoalId && discoveryChecklistItems.length > 0 && (
+            {canEdit && !discoveryGoalsTab.newGoalId && !discoveryGoalsTab.editingId && discoveryChecklistItems.length > 0 && (
               <div className="px-4 pb-4 pt-1 flex-shrink-0 dark:border-gray-700 bg-white dark:bg-gray-800">
                 <Button
                   className="-mx-1.5 -my-0.5 h-auto min-h-0 gap-1.5 px-1.5 py-0.5 text-sm font-normal text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-100"
@@ -274,6 +288,7 @@ export function GoalsTab() {
         sprints={sprints}
         tasks={tasks}
         onClose={() => setShowFinishSprintModal(false)}
+        onSprintStatusChange={handleSprintStatusUpdated}
         onTasksReload={onTasksReload}
       />
       {startSprintConfirmDialog}

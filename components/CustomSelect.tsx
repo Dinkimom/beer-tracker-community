@@ -27,6 +27,8 @@ interface CustomSelectProps<T extends string> {
   selectedPrefix?: string;
   /** `compact` — h-8, как селектор спринта и кнопки в шапке планера. */
   size?: 'compact' | 'default';
+  /** z-index портала списка (по умолчанию `modal + 1`: для вложенной модалки задайте выше, например `modalNested + 1`). */
+  menuZIndex?: number;
   title?: string;
   value: T;
   onChange: (value: T) => void;
@@ -65,6 +67,7 @@ export function CustomSelect<T extends string>({
   renderTriggerValue,
   selectedPrefix,
   title,
+  menuZIndex,
 }: CustomSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -195,7 +198,7 @@ export function CustomSelect<T extends string>({
             className={`flex flex-col bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg ${
               searchable ? 'max-h-72' : 'max-h-60 overflow-y-auto py-1'
             }`}
-            style={{ zIndex: ZIndex.modal + 1 }}
+            style={{ zIndex: menuZIndex ?? ZIndex.modal + 1 }}
           >
             {searchable ? (
               <div className="shrink-0 border-b border-gray-200 px-2 py-2 dark:border-gray-600">

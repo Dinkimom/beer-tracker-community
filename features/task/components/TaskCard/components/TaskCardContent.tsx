@@ -154,6 +154,7 @@ export function TaskCardContent({
     showPriority: true,
     showType: true,
     showEstimates: true,
+    showSeverity: true,
     showStatus: true,
     ...swimlaneCardFields,
   };

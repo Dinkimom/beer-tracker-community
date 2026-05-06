@@ -5,6 +5,10 @@ import type React from 'react';
 
 import { usePhaseCardColorScheme } from '@/components/PhaseCardColorSchemeContext';
 import { PARTS_PER_DAY } from '@/constants';
+import {
+  getOccupancySegmentEndAnchorId,
+  getOccupancySegmentStartAnchorId,
+} from '@/features/sprint/components/SprintPlanner/occupancy/utils/task-arrows/occupancyTaskArrowsHelpers';
 import { getSegmentEditorRangeAndCells, mergeAdjacentSegments } from '@/features/sprint/utils/occupancyUtils';
 import { getTaskCardStyles } from '@/features/task/components/TaskCard/components/TaskCardBody';
 import { getTeamTagClasses } from '@/utils/teamColors';
@@ -138,6 +142,8 @@ export function OccupancyQaPhaseBars({
               ? { index: idx + 1, total: qaSegmentsSorted.length }
               : null
           }
+          segmentEndAnchorId={getOccupancySegmentEndAnchorId(qaTask.id, idx)}
+          segmentStartAnchorId={getOccupancySegmentStartAnchorId(qaTask.id, idx)}
           showEndAnchor={isLast}
           showPhaseId={isFirst}
           showStartAnchor={isFirst}

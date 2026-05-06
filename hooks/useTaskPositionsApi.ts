@@ -1,6 +1,7 @@
 'use client';
 
 import type { GetTaskInfoFn } from '@/lib/layers/data/taskPositionsTypes';
+import type { PositionHistoryOptions } from '@/lib/layers/application/mobx/stores/taskPositionsStore';
 import type { TaskPosition } from '@/types';
 import type { MutableRefObject } from 'react';
 
@@ -19,9 +20,24 @@ export function useTaskPositionsApi(
   getTaskInfo?: GetTaskInfoFn | MutableRefObject<GetTaskInfoFn | undefined>
 ): [
   Map<string, TaskPosition>,
-  (positions: Map<string, TaskPosition> | ((prev: Map<string, TaskPosition>) => Map<string, TaskPosition>)) => void,
-  (position: TaskPosition, isQa?: boolean, devTaskKey?: string, immediate?: boolean) => Promise<void>,
-  (taskId: string) => Promise<void>
+  (
+    positions: Map<string, TaskPosition> | ((prev: Map<string, TaskPosition>) => Map<string, TaskPosition>),
+    options?: PositionHistoryOptions
+  ) => void,
+  (
+    position: TaskPosition,
+    isQa?: boolean,
+    devTaskKey?: string,
+    immediate?: boolean,
+    options?: PositionHistoryOptions
+  ) => Promise<void>,
+  (taskId: string, options?: PositionHistoryOptions) => Promise<void>,
+  {
+    canRedo: boolean;
+    canUndo: boolean;
+    redo: () => void;
+    undo: () => void;
+  }
 ] {
   const { taskPositions: positionsStore } = useRootStore();
   const [syncAssignees] = useDataSyncAssigneesStorage();
@@ -47,9 +63,15 @@ export function useTaskPositionsApi(
 
   return [
     positionsStore.positions as Map<string, TaskPosition>,
-    (updater) => positionsStore.setPositionsWithSave(updater),
-    (position, isQa, devTaskKey, immediate) =>
-      positionsStore.savePosition(position, isQa, devTaskKey, immediate),
-    (taskId) => positionsStore.deletePosition(taskId),
+    (updater, options) => positionsStore.setPositionsWithSave(updater, options),
+    (position, isQa, devTaskKey, immediate, options) =>
+      positionsStore.savePosition(position, isQa, devTaskKey, immediate, options),
+    (taskId, options) => positionsStore.deletePosition(taskId, options),
+    {
+      canRedo: positionsStore.canRedo,
+      canUndo: positionsStore.canUndo,
+      redo: () => positionsStore.redo(),
+      undo: () => positionsStore.undo(),
+    },
   ];
 }

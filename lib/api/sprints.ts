@@ -7,11 +7,11 @@ import type {
   SprintCommentsResponse,
   SprintLinksResponse,
   SprintPositionsResponse,
-  SprintsResponse,
   SprintTasksResponse,
   TaskLink,
   TaskPosition,
 } from '@/types';
+import type { SprintInfo } from '@/types/tracker';
 
 import { getPlannerBeerTrackerApi } from '../plannerBeerTrackerApiOverride';
 
@@ -396,7 +396,7 @@ export async function updateSprintStatus(
   sprintId: number,
   status: 'archived' | 'draft' | 'in_progress' | 'released',
   version?: number
-): Promise<{ error?: string; sprint?: SprintsResponse; success: boolean }> {
+): Promise<{ error?: string; sprint?: SprintInfo; success: boolean }> {
   try {
     const { data: result } = await getPlannerBeerTrackerApi().patch(
       `/sprints/${sprintId}/status`,

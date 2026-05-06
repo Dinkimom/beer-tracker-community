@@ -2,7 +2,7 @@ import type { TaskPosition } from '@/types';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchSprintPositions } from '@/lib/beerTrackerApi';
+import { deleteTaskPosition, fetchSprintPositions, saveTaskPosition } from '@/lib/beerTrackerApi';
 
 import { TaskPositionsStore } from './taskPositionsStore';
 
@@ -10,12 +10,15 @@ vi.mock('@/lib/beerTrackerApi', async (importOriginal) => {
   const actual = await importOriginal();
   return Object.assign({}, actual, {
     fetchSprintPositions: vi.fn(),
+    deleteTaskPosition: vi.fn().mockResolvedValue(true),
     saveTaskPosition: vi.fn().mockResolvedValue(undefined),
     saveTaskPositionsBatch: vi.fn().mockResolvedValue(undefined),
   });
 });
 
 const mockFetch = vi.mocked(fetchSprintPositions);
+const mockDelete = vi.mocked(deleteTaskPosition);
+const mockSave = vi.mocked(saveTaskPosition);
 
 function pos(id: string, startDay = 0): TaskPosition {
   return {
@@ -122,5 +125,46 @@ describe('TaskPositionsStore', () => {
 
     await store.loadSprint(42);
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('хранит последние пять шагов плана и умеет undo/redo без персистентности', async () => {
+    mockFetch.mockResolvedValue([]);
+
+    const store = new TaskPositionsStore();
+    await store.loadSprint(42);
+
+    for (let i = 0; i < 6; i++) {
+      await store.savePosition(pos('t1', i), false, undefined, true, { recordHistory: true });
+    }
+
+    expect(store.undoStack.length).toBe(5);
+    expect(store.canUndo).toBe(true);
+    expect(store.canRedo).toBe(false);
+    expect(store.positions.get('t1')?.startDay).toBe(5);
+
+    store.undo();
+    expect(store.positions.get('t1')?.startDay).toBe(4);
+    expect(store.canRedo).toBe(true);
+
+    store.redo();
+    expect(store.positions.get('t1')?.startDay).toBe(5);
+    expect(mockSave).toHaveBeenCalled();
+  });
+
+  it('undo удаления возвращает позицию, redo снова удаляет её', async () => {
+    mockFetch.mockResolvedValue([pos('t1', 2)]);
+
+    const store = new TaskPositionsStore();
+    await store.loadSprint(42);
+
+    await store.deletePosition('t1', { recordHistory: true });
+    expect(store.positions.has('t1')).toBe(false);
+
+    store.undo();
+    expect(store.positions.get('t1')?.startDay).toBe(2);
+
+    store.redo();
+    expect(store.positions.has('t1')).toBe(false);
+    expect(mockDelete).toHaveBeenCalledWith(42, 't1');
   });
 });

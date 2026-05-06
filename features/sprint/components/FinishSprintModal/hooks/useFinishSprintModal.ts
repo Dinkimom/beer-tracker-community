@@ -3,12 +3,11 @@
  */
 
 import type { MoveTasksTo, Task } from '@/types';
-import type { ChecklistItem } from '@/types/tracker';
+import type { ChecklistItem, SprintInfo } from '@/types/tracker';
 
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
-import { isTaskCompleted } from '@/features/task/hooks/useTaskFiltering';
 import { updateSprintGoal } from '@/lib/api/sprintGoals';
 import {
   updateChecklistItem,
@@ -23,6 +22,17 @@ const STORAGE_KEY = 'finish-sprint-selected-chat';
 
 type ChecklistItemWithGoalId = ChecklistItem & { goalTaskId?: string; goalSource?: 'sprint_goals' | 'tracker' };
 
+export function isTaskClosedForSprintFinish(task: Task): boolean {
+  return (task.originalStatus ?? '').trim().toLowerCase() === 'closed';
+}
+
+export function getTasksToMoveOnSprintFinish(tasks: Task[], goalTaskIds: Set<string>): Task[] {
+  return tasks.filter(task => {
+    if (goalTaskIds.has(task.id)) return false;
+    return !isTaskClosedForSprintFinish(task);
+  });
+}
+
 interface UseFinishSprintModalProps {
   /** id — ключ задачи в Tracker; для целей из sprint_goals id синтетический (delivery/discovery) — закрытие задачи в Tracker не вызываем */
   goalTasks: Array<{ id: string; source?: 'sprint_goals' | 'tracker' }>;
@@ -34,7 +44,7 @@ interface UseFinishSprintModalProps {
     version?: number;
   } | null;
   tasks: Task[];
-  onSprintStatusChange?: () => void;
+  onSprintStatusChange?: (updatedSprint: SprintInfo) => void;
   onTasksReload?: () => void;
 }
 
@@ -139,10 +149,7 @@ export function useFinishSprintModal({
     setIsLoading(true);
     try {
       const goalIdSet = new Set(goalTasks.map(g => g.id));
-      const unfinishedTasks = tasks.filter(task => {
-        if (goalIdSet.has(task.id)) return false;
-        return !isTaskCompleted(task);
-      });
+      const unfinishedTasks = getTasksToMoveOnSprintFinish(tasks, goalIdSet);
 
       // Переносим задачи
       if (unfinishedTasks.length > 0) {
@@ -206,8 +213,8 @@ export function useFinishSprintModal({
 
       toast.success('Спринт закрыт');
 
-      if (onSprintStatusChange) {
-        onSprintStatusChange();
+      if (result.sprint && onSprintStatusChange) {
+        onSprintStatusChange(result.sprint);
       }
       if (onTasksReload) {
         onTasksReload();

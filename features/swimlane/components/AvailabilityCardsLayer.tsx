@@ -1,6 +1,6 @@
 'use client';
 
-import type { TechSprintEntry, VacationEntry } from '@/types/quarterly';
+import type { BoardAvailabilityEvent } from '@/types/quarterly';
 
 import { getSegmentsForDeveloper } from '@/features/swimlane/utils/availabilitySegments';
 import { getLeftPercent, getWidthPercent } from '@/features/swimlane/utils/positionUtils';
@@ -8,24 +8,22 @@ import { getLeftPercent, getWidthPercent } from '@/features/swimlane/utils/posit
 import { AvailabilityCard } from './AvailabilityCard';
 
 export interface AvailabilityCardsLayerProps {
+  boardEvents: BoardAvailabilityEvent[];
   developerId: string;
   /** Ширина колонки исполнителей — текст карточки прилипает справа от неё */
   participantsColumnWidth: number;
   sprintStartDate: Date;
-  techSprints: TechSprintEntry[];
   totalHeight: number;
-  vacations: VacationEntry[];
 }
 
 export function AvailabilityCardsLayer({
+  boardEvents,
   developerId,
   participantsColumnWidth,
   sprintStartDate,
   totalHeight,
-  vacations,
-  techSprints,
 }: AvailabilityCardsLayerProps) {
-  const segments = getSegmentsForDeveloper(developerId, sprintStartDate, vacations, techSprints);
+  const segments = getSegmentsForDeveloper(developerId, sprintStartDate, boardEvents);
   if (segments.length === 0) return null;
 
   return (

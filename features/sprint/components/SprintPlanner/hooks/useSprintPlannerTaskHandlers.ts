@@ -33,11 +33,20 @@ interface UseSprintPlannerTaskHandlersProps {
   tasks: Task[];
   tasksMap: Map<string, Task>;
   debouncedUpdateXarrow: () => void;
-  deletePosition: (taskId: string) => Promise<void>;
+  deletePosition: (taskId: string, options?: { recordHistory?: boolean }) => Promise<void>;
   /** Нет qaEngineer на dev-задаче — открыть пикер QA (anchor с кнопки +) */
   onRequestQaEngineerPicker?: (devTaskId: string, anchorRect: DOMRect) => void;
-  savePosition: (position: TaskPosition, isQa: boolean, devTaskKey?: string) => Promise<void>;
-  setTaskPositions: (updater: (prev: Map<string, TaskPosition>) => Map<string, TaskPosition>) => void;
+  savePosition: (
+    position: TaskPosition,
+    isQa: boolean,
+    devTaskKey?: string,
+    immediate?: boolean,
+    options?: { recordHistory?: boolean }
+  ) => Promise<void>;
+  setTaskPositions: (
+    updater: (prev: Map<string, TaskPosition>) => Map<string, TaskPosition>,
+    options?: { recordHistory?: boolean }
+  ) => void;
   setTasks: (updater: (prev: Task[]) => Task[]) => void;
 }
 
@@ -62,9 +71,15 @@ export function useSprintPlannerTaskHandlers({
   const [syncEstimates] = useDataSyncEstimatesStorage();
   // Хук для обработки изменения размера задач
   const timelineTotalCells = sprintTimelineWorkingDays * PARTS_PER_DAY;
+  const setPlanTaskPositions = useCallback(
+    (updater: (prev: Map<string, TaskPosition>) => Map<string, TaskPosition>) => {
+      setTaskPositions(updater, { recordHistory: true });
+    },
+    [setTaskPositions]
+  );
 
   const { handleTaskResize } = useTaskResize({
-    setTaskPositions,
+    setTaskPositions: setPlanTaskPositions,
     timelineTotalCells,
     updateXarrow: debouncedUpdateXarrow,
     onAfterResize: (taskId, newDuration, updatedPosition) => {
@@ -164,7 +179,7 @@ export function useSprintPlannerTaskHandlers({
         const newPositions = new Map(prev);
         newPositions.set(taskId, position);
         return newPositions;
-      });
+      }, { recordHistory: true });
       // Сохраняем позицию через API (асинхронно)
       if (selectedSprintId) {
         const positionWithSource: TaskPosition & { __source: string } = {
@@ -207,7 +222,7 @@ export function useSprintPlannerTaskHandlers({
 
         newPositions.set(taskId, updatedPosition);
         return newPositions;
-      });
+      }, { recordHistory: true });
 
       // Определяем, является ли задача QA
       const task = tasksMap.get(taskId) || qaTasksByOriginalId.get(taskId);
@@ -244,7 +259,7 @@ export function useSprintPlannerTaskHandlers({
         const newPositions = new Map(prev);
         newPositions.delete(taskId);
         return newPositions;
-      });
+      }, { recordHistory: true });
       deletePosition(taskId).catch((error) => {
         console.error('Error deleting position:', error);
         // При ошибке перезагрузим позиции — они подтянутся при следующем fetch
@@ -300,7 +315,7 @@ export function useSprintPlannerTaskHandlers({
         const next = new Map(prev);
         next.set(task.id, position);
         return next;
-      });
+      }, { recordHistory: true });
       savePosition(position, isQa, isQa ? task.originalTaskId : undefined).catch((err) => {
         console.error('Error saving position:', err);
       });

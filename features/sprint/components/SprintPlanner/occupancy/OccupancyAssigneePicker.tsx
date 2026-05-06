@@ -10,7 +10,11 @@ import { createPortal } from 'react-dom';
 
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
-import { ZIndex } from '@/constants';
+import { WORKING_DAYS, ZIndex } from '@/constants';
+import {
+  normalizeQuarterlyAvailabilityToBoardEvents,
+  quarterlyAvailabilityHasBlockingSegments,
+} from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
 import { getSegmentsForDeveloper } from '@/features/swimlane/utils/availabilitySegments';
 import { taskHasEstimateForAssignee } from '@/lib/trackerIntegration/plannerThresholds';
 
@@ -23,6 +27,8 @@ const VIEWPORT_PADDING = 8;
 
 const AVAILABILITY_LABELS: Record<string, string> = {
   vacation: 'Отпуск',
+  sick_leave: 'Больничный',
+  duty: 'Дежурство',
   'tech-sprint-web': 'Техспринт (Web)',
   'tech-sprint-back': 'Техспринт (Back)',
   'tech-sprint-qa': 'Техспринт (QA)',
@@ -89,16 +95,17 @@ export function OccupancyAssigneePicker({
   task,
 }: OccupancyAssigneePickerProps) {
   const developerSegments = useMemo(() => {
-    if (!availability || (availability.vacations.length === 0 && availability.techSprints.length === 0)) {
+    if (!availability || !quarterlyAvailabilityHasBlockingSegments(availability)) {
       return new Map<string, Array<{ kind: string; dateRangeLabel: string }>>();
     }
+    const boardEvents = normalizeQuarterlyAvailabilityToBoardEvents(availability);
     const map = new Map<string, Array<{ kind: string; dateRangeLabel: string }>>();
     developers.forEach((d) => {
       const segments = getSegmentsForDeveloper(
         d.id,
         sprintStartDate,
-        availability.vacations,
-        availability.techSprints
+        boardEvents,
+        WORKING_DAYS
       );
       if (segments.length > 0) map.set(d.id, segments);
     });

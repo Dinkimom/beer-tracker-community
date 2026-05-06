@@ -114,6 +114,7 @@ export function UserSelector({
   const handleSelect = useCallback(
     (user: RegistryUserItem) => {
       onChange(user.trackerId);
+      setSelectedUser(user);
       setIsOpen(false);
     },
     [onChange]
@@ -215,11 +216,11 @@ export function UserSelector({
           {selectedUser ? (
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <Avatar
-                avatarUrl={selectedUser.avatarUrl}
-                initials={getInitials(selectedUser.displayName)}
+                avatarUrl={selectedUser?.avatarUrl}
+                initials={getInitials(buttonText)}
                 size="sm"
               />
-              <span className="truncate">{selectedUser.displayName}</span>
+              <span className="truncate">{selectedUser?.displayName}</span>
             </div>
           ) : (
             <span className={value ? '' : 'text-gray-500 dark:text-gray-400'}>{buttonText}</span>

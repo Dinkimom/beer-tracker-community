@@ -35,7 +35,7 @@ import { resolveOccupancyMinEstimates } from '@/lib/trackerIntegration/plannerTh
 import { DELAYS } from '@/utils/constants';
 import { getSprintStartDate, resolveSprintTimelineWorkingDaysCount } from '@/utils/dateUtils';
 
-import { useBoardVacations } from '../hooks/useBoardVacations';
+import { useBoardAvailabilityEvents } from '../hooks/useBoardAvailabilityEvents';
 import { useDevelopersManagement } from '../hooks/useDevelopersManagement';
 import { useKeyboardAndMouseHandlers } from '../hooks/useKeyboardAndMouseHandlers';
 import { useScrollToCurrentDay } from '../hooks/useScrollToCurrentDay';
@@ -266,6 +266,7 @@ export const SprintPlanner = observer(function SprintPlanner({
     setTaskPositions,
     savePosition,
     deletePosition,
+    positionHistory,
     taskLinks,
     setTaskLinks,
     saveLink,
@@ -378,13 +379,17 @@ export const SprintPlanner = observer(function SprintPlanner({
     [sprintInfo?.endDate, sprintInfo?.startDate]
   );
 
-  // Отпуска: теперь из независимой таблицы vacations (по доске), чтобы покрывать переходы между кварталами.
-  const { data: boardVacations = [] } = useBoardVacations(boardIdForPlannerData ?? null);
-  // Tech-sprints пока остаются пустыми (старый источник был quarterly plan).
+  // События доступности по доске (отпуск, техспринт, больничный, дежурство).
+  const { data: boardAvailabilityEvents = [] } = useBoardAvailabilityEvents(boardIdForPlannerData ?? null);
   const availability = useMemo(() => {
     if (!boardIdForPlannerData) return null;
-    return { planId: `board-${boardIdForPlannerData}`, vacations: boardVacations, techSprints: [] };
-  }, [boardVacations, boardIdForPlannerData]);
+    return {
+      planId: `board-${boardIdForPlannerData}`,
+      boardEvents: boardAvailabilityEvents,
+      vacations: [],
+      techSprints: [],
+    };
+  }, [boardAvailabilityEvents, boardIdForPlannerData]);
 
   // Родительские тикеты из группировки occupancy — запрос плана только по ним
   const occupancyParentKeys = useMemo(
@@ -596,6 +601,7 @@ export const SprintPlanner = observer(function SprintPlanner({
           commentsVisible={sprintPlannerUi.commentsVisible}
           developers={developers}
           occupancyStatusFilter={occupancyStatusFilter}
+          planHistory={positionHistory}
           selectedAssigneeIds={selectedAssigneeIds}
           selectedSprintId={selectedSprintId}
           setCommentsVisible={sprintPlannerUi.setCommentsVisible}

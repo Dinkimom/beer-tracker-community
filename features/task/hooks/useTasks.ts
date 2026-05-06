@@ -16,6 +16,33 @@ export interface TasksResponse {
   tasks: Task[];
 }
 
+export function patchSprintInfoInTasksQueries(
+  queryClient: QueryClient,
+  sprintInfo: SprintInfo
+): void {
+  queryClient.setQueriesData<TasksResponse>(
+    {
+      predicate: (query) => {
+        const key = query.queryKey;
+        return (
+          (key[0] === 'tasks' && key[1] === sprintInfo.id) ||
+          (key[0] === 'tasks' && key[1] === 'demo' && key[2] === sprintInfo.id)
+        );
+      },
+    },
+    (old) => {
+      if (!old?.sprintInfo) return old;
+      return {
+        ...old,
+        sprintInfo: {
+          ...old.sprintInfo,
+          ...sprintInfo,
+        },
+      };
+    }
+  );
+}
+
 /**
  * Оптимистично обновляет только массив `tasks` в кэше `useTasks` / `useReloadTasks`.
  * Если записи в кэше ещё нет — ничего не делает.

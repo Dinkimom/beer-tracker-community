@@ -79,7 +79,7 @@ const BEER_TRACKER_TABLES = [
   'team_members',
   'teams',
   'users',
-  'vacations',
+  'board_availability_events',
 ] as const;
 
 function schemaQualified(): string {

@@ -21,7 +21,8 @@ export interface UseSprintPlannerEstimateHandlersParams {
     position: TaskPosition,
     isQa: boolean,
     devKey?: string,
-    force?: boolean
+    force?: boolean,
+    options?: { recordHistory?: boolean }
   ) => Promise<void>;
 }
 
@@ -163,7 +164,7 @@ export function useSprintPlannerEstimateHandlers({
         __source: (position as unknown as { __source?: string }).__source ?? 'SprintPlanner.handleOccupancyPositionSave',
       } as TaskPosition & { __source: string };
 
-      await savePosition(positionWithSource, isQa, devKey, true);
+      await savePosition(positionWithSource, isQa, devKey, true, { recordHistory: true });
     },
     [tasksMap, handleUpdateEstimate, savePosition, syncEstimates]
   );

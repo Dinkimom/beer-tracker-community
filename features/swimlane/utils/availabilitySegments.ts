@@ -3,7 +3,7 @@
  */
 
 import type { AvailabilityCardKind } from '@/features/swimlane/components/AvailabilityCard';
-import type { TechSprintEntry, VacationEntry } from '@/types/quarterly';
+import type { BoardAvailabilityEvent } from '@/types/quarterly';
 
 import { PARTS_PER_DAY, WORKING_DAYS } from '@/constants';
 import { getWorkingDaysRange } from '@/utils/dateUtils';
@@ -24,7 +24,7 @@ function parseIsoDateOnlyUtc(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
 }
 
-function dayOverlapsEntry(dayDate: Date, entry: TechSprintEntry | VacationEntry): boolean {
+function dayOverlapsEntry(dayDate: Date, entry: BoardAvailabilityEvent): boolean {
   const dayStart = normalizeDayStart(dayDate);
   const dayEnd = normalizeDayEnd(dayDate);
   const entryStart = normalizeDayStart(parseIsoDateOnlyUtc(entry.startDate));
@@ -44,13 +44,23 @@ function formatDateRange(startDate: string, endDate: string): string {
   return start === end ? start : `${start}–${end}`;
 }
 
-function entryToKind(entry: TechSprintEntry | VacationEntry): AvailabilityCardKind {
-  if ('type' in entry) {
-    if (entry.type === 'web') return 'tech-sprint-web';
-    if (entry.type === 'back') return 'tech-sprint-back';
-    if (entry.type === 'qa') return 'tech-sprint-qa';
+function boardEventToKind(ev: BoardAvailabilityEvent): AvailabilityCardKind {
+  switch (ev.eventType) {
+    case 'duty':
+      return 'duty';
+    case 'sick_leave':
+      return 'sick_leave';
+    case 'vacation':
+      return 'vacation';
+    case 'tech_sprint': {
+      const t = ev.techSprintSubtype;
+      if (t === 'web') return 'tech-sprint-web';
+      if (t === 'back') return 'tech-sprint-back';
+      return 'tech-sprint-qa';
+    }
+    default:
+      return 'vacation';
   }
-  return 'vacation';
 }
 
 export interface AvailabilitySegment {
@@ -63,22 +73,17 @@ export interface AvailabilitySegment {
 export function getSegmentsForDeveloper(
   developerId: string,
   sprintStartDate: Date,
-  vacations: VacationEntry[],
-  techSprints: TechSprintEntry[],
+  boardEvents: BoardAvailabilityEvent[],
   workingDaysCount: number = WORKING_DAYS
 ): AvailabilitySegment[] {
   const count = Math.max(1, workingDaysCount);
   const workingDays = getWorkingDaysRange(sprintStartDate, count);
   const segments: AvailabilitySegment[] = [];
 
-  const entries: Array<{ entry: TechSprintEntry | VacationEntry; kind: AvailabilityCardKind }> = [
-    ...vacations.filter((v) => v.memberId === developerId).map((entry) => ({ entry, kind: 'vacation' as const })),
-    ...techSprints
-      .filter((t) => t.memberId === developerId)
-      .map((entry) => ({ entry, kind: entryToKind(entry) })),
-  ];
+  const entries = boardEvents.filter((v) => v.memberId === developerId);
 
-  for (const { entry, kind } of entries) {
+  for (const entry of entries) {
+    const kind = boardEventToKind(entry);
     const overlappingDays: number[] = [];
     for (let dayIndex = 0; dayIndex < workingDays.length; dayIndex++) {
       if (dayOverlapsEntry(workingDays[dayIndex]!, entry)) {

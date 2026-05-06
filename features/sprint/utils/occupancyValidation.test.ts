@@ -40,14 +40,43 @@ describe('buildAssigneeUnavailableDays', () => {
 
   it('returns empty map when vacations and techSprints are empty', () => {
     expect(
-      buildAssigneeUnavailableDays({ vacations: [], techSprints: [] }, new Date(2025, 0, 6)).size
+      buildAssigneeUnavailableDays(
+        { planId: 'p-empty', vacations: [], techSprints: [] },
+        new Date(2025, 0, 6)
+      ).size
     ).toBe(0);
+  });
+
+  it('marks days from boardEvents sick_leave', () => {
+    const sprintStart = new Date(2025, 0, 6);
+    const map = buildAssigneeUnavailableDays(
+      {
+        boardEvents: [
+          {
+            id: 's1',
+            memberId: 'bob',
+            memberName: 'Bob',
+            startDate: '2000-01-01',
+            endDate: '2100-12-31',
+            eventType: 'sick_leave',
+          },
+        ],
+        planId: 'board-1',
+        vacations: [],
+        techSprints: [],
+      },
+      sprintStart
+    );
+    const days = map.get('bob');
+    expect(days).toBeDefined();
+    expect(days!.size).toBeGreaterThan(0);
   });
 
   it('marks working-day indices when vacation range covers sprint calendar', () => {
     const sprintStart = new Date(2025, 0, 6);
     const map = buildAssigneeUnavailableDays(
       {
+        planId: 'p-v1',
         vacations: [
           {
             id: 'v1',

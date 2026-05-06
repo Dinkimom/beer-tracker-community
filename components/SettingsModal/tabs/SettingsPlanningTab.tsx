@@ -372,6 +372,13 @@ export function SettingsPlanningTab(props: SettingsPlanningTabProps) {
                   setSwimlaneCardFields((prev) => ({ ...prev, showStatus: checked }))
                 }
               />
+              <CheckboxOption
+                checked={swimlaneCardFields.showSeverity ?? true}
+                label={t('settings.planningTab.rowFieldLabels.severity')}
+                onChange={(checked) =>
+                  setSwimlaneCardFields((prev) => ({ ...prev, showSeverity: checked }))
+                }
+              />
             </div>
           </div>
         </section>

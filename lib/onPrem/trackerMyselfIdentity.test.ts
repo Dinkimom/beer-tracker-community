@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { trackerIdentityCandidatesFromMyself } from './trackerMyselfIdentity';
+import { trackerIdentityCandidatesFromMyself, trackerWorkEmailFromMyself } from './trackerMyselfIdentity';
+
+describe('trackerWorkEmailFromMyself', () => {
+  it('returns normalized email', () => {
+    expect(trackerWorkEmailFromMyself({ email: '  User@Example.COM  ' })).toBe('user@example.com');
+  });
+
+  it('returns null when missing or empty', () => {
+    expect(trackerWorkEmailFromMyself(null)).toBeNull();
+    expect(trackerWorkEmailFromMyself({})).toBeNull();
+    expect(trackerWorkEmailFromMyself({ email: '   ' })).toBeNull();
+    expect(trackerWorkEmailFromMyself({ email: 1 })).toBeNull();
+  });
+});
 
 describe('trackerIdentityCandidatesFromMyself', () => {
   it('returns string uid from numeric uid', () => {

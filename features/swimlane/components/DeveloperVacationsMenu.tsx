@@ -11,14 +11,14 @@ export interface DeveloperVacationsMenuProps {
   boardId: number | null;
   memberId: string;
   memberName: string;
-  onEditVacations: (args: { boardId: number; memberId: string; memberName: string }) => void;
+  onEditAvailability: (args: { boardId: number; memberId: string; memberName: string }) => void;
 }
 
 export function DeveloperVacationsMenu({
   boardId,
   memberId,
   memberName,
-  onEditVacations,
+  onEditAvailability,
 }: DeveloperVacationsMenuProps) {
   const [open, setOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
@@ -84,11 +84,11 @@ export function DeveloperVacationsMenu({
               variant="ghost"
               onClick={() => {
                 setOpen(false);
-                onEditVacations({ boardId, memberId, memberName });
+                onEditAvailability({ boardId, memberId, memberName });
               }}
             >
               <Icon className="h-4 w-4 text-gray-500 dark:text-gray-300" name="edit" />
-              Редактировать отпуски
+              События доступности
             </Button>
           </div>
         </>,

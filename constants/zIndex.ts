@@ -37,6 +37,9 @@ const levels = {
   popupContent: 1320,
   modalBackdrop: 2000,
   modal: 2001,
+  /** Поверх обычной модалки (второй уровень: форма внутри модалки). */
+  modalNestedBackdrop: 2010,
+  modalNested: 2011,
   overlay: 3000,
 } as const;
 
