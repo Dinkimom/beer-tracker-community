@@ -79,10 +79,10 @@ export function FinishSprintTaskTransfer({
               Целевой спринт
             </label>
             <CustomSelect<SprintSelectValue>
-              searchable
               disabled={draftSprints.length === 0}
               options={sprintOptions}
               searchPlaceholder="Поиск спринта..."
+              searchable
               value={selectedSprintValue}
               onChange={(value) => {
                 onSelectedSprintIdChange(value ? parseInt(value, 10) : null);

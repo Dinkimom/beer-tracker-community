@@ -28,7 +28,7 @@ interface PublicRegistryRow {
   name: string | null;
   patronymic: string | null;
   surname: string | null;
-  tracker_id: string | number | null;
+  tracker_id: number | string | null;
   uuid: string;
 }
 

@@ -38,6 +38,8 @@ interface SwimlaneInProgressFactLayerProps {
   changelogsByTaskId: Map<string, ChangelogEntry[]>;
   commentsByTaskId: Map<string, IssueComment[]>;
   developerMap: Map<string, Developer>;
+  /** Подсветка колбасы факта по hover карточки/факта конкретной задачи */
+  factHoveredTaskId?: string | null;
   layerId: string;
   segments: SwimlaneInProgressFactSegment[];
   sprintStartDate: Date;
@@ -46,8 +48,6 @@ interface SwimlaneInProgressFactLayerProps {
   tasksMap: Map<string, Task>;
   /** Подсветка карточки задачи при наведении на соответствующую колбасу факта */
   onFactSegmentHover?: (taskId: string | null) => void;
-  /** Подсветка колбасы факта по hover карточки/факта конкретной задачи */
-  factHoveredTaskId?: string | null;
   requestArrowRedraw: () => void;
 }
 
@@ -168,6 +168,7 @@ export function SwimlaneInProgressFactLayer({
                 changelogsByTaskId={changelogsByTaskId}
                 commentsByTaskId={commentsByTaskId}
                 developerMap={developerMap}
+                factHoveredTaskId={factHoveredTaskId}
                 laneItems={laneItems}
                 laneRowHeight={laneRowHeight}
                 layerId={layerId}
@@ -175,7 +176,6 @@ export function SwimlaneInProgressFactLayer({
                 swimlaneRowTaskIds={swimlaneRowTaskIds}
                 tasksMap={tasksMap}
                 timelineStartCell={timelineStartCell}
-                factHoveredTaskId={factHoveredTaskId}
                 onFactSegmentHover={onFactSegmentHover}
               />
             </div>

@@ -289,13 +289,13 @@ export function Swimlane({
                 }
                 commentsByTaskId={swimlaneFactCommentsByTaskId ?? EMPTY_SWIMLANE_FACT_COMMENTS}
                 developerMap={swimlaneFactDeveloperMap ?? EMPTY_SWIMLANE_FACT_DEVELOPERS}
+                factHoveredTaskId={factHoveredTaskId}
                 layerId={`swimlane-fact-${developer.id}`}
                 requestArrowRedraw={requestArrowRedraw}
                 segments={swimlaneInProgressDurations}
                 sprintStartDate={sprintStartDate}
                 swimlaneRowTaskIds={swimlaneRowTaskIds}
                 tasksMap={tasksMap}
-                factHoveredTaskId={factHoveredTaskId}
                 onFactSegmentHover={onFactSegmentHover}
               />
             )}

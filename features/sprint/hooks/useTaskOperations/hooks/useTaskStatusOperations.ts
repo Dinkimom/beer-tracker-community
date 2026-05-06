@@ -8,11 +8,11 @@ import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 
 import { mergeTransitionExtraFieldsIntoTask } from '@/features/sprint/utils/mergeTransitionFieldsIntoTask';
+import { getTaskTrackerDisplayKey } from '@/features/task/utils/taskUtils';
 import { getIssueTransitions, changeIssueStatus } from '@/lib/beerTrackerApi';
 import { mapStatus } from '@/utils/statusMapper';
 
 import { findTaskById, updateTaskInArray } from '../utils/taskUtils';
-import { getTaskTrackerDisplayKey } from '@/features/task/utils/taskUtils';
 
 interface UseTaskStatusOperationsProps {
   tasks: Task[];

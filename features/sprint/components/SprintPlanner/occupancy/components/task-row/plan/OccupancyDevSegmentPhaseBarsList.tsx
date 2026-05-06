@@ -4,11 +4,11 @@ import type { OccupancyPlanPhaseBarsProps } from './occupancyPlanPhaseBars.types
 import type { TaskPosition } from '@/types';
 import type React from 'react';
 
-import { mergeAdjacentSegments } from '@/features/sprint/utils/occupancyUtils';
 import {
   getOccupancySegmentEndAnchorId,
   getOccupancySegmentStartAnchorId,
 } from '@/features/sprint/components/SprintPlanner/occupancy/utils/task-arrows/occupancyTaskArrowsHelpers';
+import { mergeAdjacentSegments } from '@/features/sprint/utils/occupancyUtils';
 import { getTeamTagClasses } from '@/utils/teamColors';
 
 import { OccupancyPhaseBar } from './OccupancyPhaseBar';

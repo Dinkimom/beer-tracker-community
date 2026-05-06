@@ -5,8 +5,8 @@ import type { Task } from '@/types';
 import { useCallback, useState } from 'react';
 
 import { findTaskById } from '@/features/sprint/hooks/useTaskOperations/utils/taskUtils';
-import { fetchScreenFields, getTransitionFields, type TransitionField } from '@/lib/beerTrackerApi';
 import { getTaskTrackerDisplayKey } from '@/features/task/utils/taskUtils';
+import { fetchScreenFields, getTransitionFields, type TransitionField } from '@/lib/beerTrackerApi';
 
 interface TransitionModalState {
   fields: TransitionField[];

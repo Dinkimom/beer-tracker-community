@@ -4,8 +4,8 @@ import type { PlanningPhaseCardColorScheme, SwimlaneCardFieldsVisibility } from 
 import type { Task, Developer, TaskCardVariant } from '@/types';
 
 import { StatusTag } from '@/components/StatusTag';
-import { useI18n } from '@/contexts/LanguageContext';
 import { TEAM_COLORS, TEAM_BORDER_COLORS, TEAM_SIDEBAR_COLORS } from '@/constants';
+import { useI18n } from '@/contexts/LanguageContext';
 import { isEffectivelyQaTask } from '@/features/task/utils/taskUtils';
 import { formatTaskTestPointsForDisplay } from '@/lib/pointsUtils';
 import {

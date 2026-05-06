@@ -18,6 +18,8 @@ interface CustomSelectProps<T extends string> {
   className?: string;
   /** Блокирует открытие списка и смену значения (например, пока идёт сохранение). */
   disabled?: boolean;
+  /** z-index портала списка (по умолчанию `modal + 1`: для вложенной модалки задайте выше, например `modalNested + 1`). */
+  menuZIndex?: number;
   options: CustomSelectOption<T>[];
   /** Поле поиска над списком: фильтр по подстроке в label и value. */
   searchable?: boolean;
@@ -27,8 +29,6 @@ interface CustomSelectProps<T extends string> {
   selectedPrefix?: string;
   /** `compact` — h-8, как селектор спринта и кнопки в шапке планера. */
   size?: 'compact' | 'default';
-  /** z-index портала списка (по умолчанию `modal + 1`: для вложенной модалки задайте выше, например `modalNested + 1`). */
-  menuZIndex?: number;
   title?: string;
   value: T;
   onChange: (value: T) => void;

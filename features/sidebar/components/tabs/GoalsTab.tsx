@@ -1,8 +1,8 @@
 import type { SprintInfo } from '@/types/tracker';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/Button';
 import { useConfirmDialog } from '@/components/ConfirmDialog';

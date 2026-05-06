@@ -9,8 +9,8 @@ import { useRef, useState, useEffect } from 'react';
 import { IssueTypeIcon } from '@/components/IssueTypeIcon';
 import { PriorityIcon } from '@/components/PriorityIcon';
 import { TextTooltip } from '@/components/TextTooltip';
-import { useI18n } from '@/contexts/LanguageContext';
 import { TEAM_TEXT_COLORS } from '@/constants';
+import { useI18n } from '@/contexts/LanguageContext';
 import { getStatusColors, resolveStatusForPhaseCardColors } from '@/utils/statusColors';
 
 interface TaskCardContentProps {

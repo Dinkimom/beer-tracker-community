@@ -1,7 +1,7 @@
 'use client';
 
-import type { GetTaskInfoFn } from '@/lib/layers/data/taskPositionsTypes';
 import type { PositionHistoryOptions } from '@/lib/layers/application/mobx/stores/taskPositionsStore';
+import type { GetTaskInfoFn } from '@/lib/layers/data/taskPositionsTypes';
 import type { TaskPosition } from '@/types';
 import type { MutableRefObject } from 'react';
 

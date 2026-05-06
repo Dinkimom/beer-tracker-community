@@ -5,11 +5,11 @@ import type { QuarterlyAvailability } from '@/types/quarterly';
 import { useMemo } from 'react';
 
 import { WORKING_DAYS } from '@/constants';
+import { buildAssigneeUnavailableDays, getOccupancyErrorDays, getOccupancyErrorDetailsByDay, getOccupancyErrorReasons, getOccupancyErrorTaskIds } from '@/features/sprint/utils/occupancyValidation';
 import {
   normalizeQuarterlyAvailabilityToBoardEvents,
   quarterlyAvailabilityHasBlockingSegments,
 } from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
-import { buildAssigneeUnavailableDays, getOccupancyErrorDays, getOccupancyErrorDetailsByDay, getOccupancyErrorReasons, getOccupancyErrorTaskIds } from '@/features/sprint/utils/occupancyValidation';
 import { getSegmentsForDeveloper } from '@/features/swimlane/utils/availabilitySegments';
 
 import { buildFlattenedRows } from '../utils/buildFlattenedRows';

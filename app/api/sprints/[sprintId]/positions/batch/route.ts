@@ -11,6 +11,7 @@ import { updateIssueAssignee } from '@/lib/trackerApi';
 import { loadTrackerIntegrationForTrackerPatch } from '@/lib/trackerIntegration';
 import { buildIssueAssigneePatch } from '@/lib/trackerIntegration/buildIssueAssigneePatch';
 import { BatchPositionsSchema, formatValidationError, validateRequest } from '@/lib/validation';
+
 import { syncPlannedDatesToTracker } from '../plannedDateSync';
 
 /**

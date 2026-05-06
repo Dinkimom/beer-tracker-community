@@ -74,13 +74,13 @@ export function SwimlaneFactLaneFlexRow({
           changelogsByTaskId={changelogsByTaskId}
           commentsByTaskId={commentsByTaskId}
           developerMap={developerMap}
+          factHoveredTaskId={factHoveredTaskId}
           hideTaskSummary={swimlaneRowTaskIds.has(seg.taskId)}
           laneRowHeight={laneRowHeight}
           layerId={layerId}
           phase={phase}
           seg={seg}
           tasksMap={tasksMap}
-          factHoveredTaskId={factHoveredTaskId}
           onFactSegmentHover={onFactSegmentHover}
         />
       );
@@ -96,6 +96,7 @@ export function SwimlaneFactLaneFlexRow({
         changelogsByTaskId={changelogsByTaskId}
         commentsByTaskId={commentsByTaskId}
         developerMap={developerMap}
+        factHoveredTaskId={factHoveredTaskId}
         hideTaskSummary={swimlaneRowTaskIds.has(seg.taskId)}
         laneRowHeight={laneRowHeight}
         layerId={layerId}
@@ -103,7 +104,6 @@ export function SwimlaneFactLaneFlexRow({
         seg={seg}
         tasksMap={tasksMap}
         widthInSpan={widthInSpan}
-        factHoveredTaskId={factHoveredTaskId}
         onFactSegmentHover={onFactSegmentHover}
       />
     );

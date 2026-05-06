@@ -10,10 +10,10 @@ import { ZIndex } from '@/constants';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 interface OccupancyAssigneeFilterProps {
-  developers: Developer[];
-  selectedAssigneeIds: Set<string>;
   /** Ограничение ширины триггера в плотных тулбарах (truncate подписи) */
   className?: string;
+  developers: Developer[];
+  selectedAssigneeIds: Set<string>;
   onSelectionChange: (selectedIds: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
 }
 

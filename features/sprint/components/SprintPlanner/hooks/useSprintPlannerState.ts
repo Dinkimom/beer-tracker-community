@@ -7,6 +7,7 @@
  */
 
 import type { GetTaskInfoFn } from '@/hooks/useApiStorage';
+import type { PlanHistoryAppliedPayload } from '@/lib/layers/application/mobx/stores/taskPositionsStore';
 import type { Task, TaskPosition } from '@/types';
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -17,7 +18,6 @@ import { reconcileTasksAfterPlanHistoryStep } from '@/features/sprint/components
 import { patchSprintTasksQuery, useTasks } from '@/features/task/hooks/useTasks';
 import { useTaskPositionsApi, useTaskLinksApi, useCommentsApi } from '@/hooks/useApiStorage';
 import { useBoardViewModeStorage, useSidebarWidthStorage, useDataSyncEstimatesStorage } from '@/hooks/useLocalStorage';
-import type { PlanHistoryAppliedPayload } from '@/lib/layers/application/mobx/stores/taskPositionsStore';
 import { useRootStore } from '@/lib/layers';
 
 import { useTaskState } from '../../../hooks/useTaskState';

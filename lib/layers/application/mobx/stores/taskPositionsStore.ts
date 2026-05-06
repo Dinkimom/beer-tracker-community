@@ -25,7 +25,7 @@ export interface PlanHistoryAppliedSave {
   position: TaskPosition;
 }
 
-export type PlanHistoryAppliedPayload = { saves: PlanHistoryAppliedSave[] };
+export interface PlanHistoryAppliedPayload { saves: PlanHistoryAppliedSave[] }
 
 export interface PositionHistoryOptions {
   recordHistory?: boolean;

@@ -1,13 +1,14 @@
 'use client';
 
+import type { ValidationIssue } from '@/features/task/utils/taskValidation';
+
 import { Button } from '@/components/Button';
 import { useI18n } from '@/contexts/LanguageContext';
 import { useTaskSidebar } from '@/features/sidebar/contexts/TaskSidebarContext';
-import type { ValidationIssue } from '@/features/task/utils/taskValidation';
-import { getSidebarTaskGroupKey } from '@/features/task/utils/taskSidebarGroupKey';
 import { formatTaskGroupLabel } from '@/features/task/utils/formatTaskGroupLabel';
+import { getSidebarTaskGroupKey } from '@/features/task/utils/taskSidebarGroupKey';
 
-function validationMessage(issue: ValidationIssue, t: (k: string, p?: Record<string, string | number>) => string) {
+function validationMessage(issue: ValidationIssue, t: (k: string, p?: Record<string, number | string>) => string) {
   return t(`task.validation.${issue.type}`, issue.params);
 }
 

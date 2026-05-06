@@ -41,10 +41,10 @@ function rowToEvent(row: {
     memberName: row.member_name,
     startDate: toIsoDateOnly(row.start_date),
     endDate: toIsoDateOnly(row.end_date),
-    eventType: row.event_type as 'vacation' | 'tech_sprint' | 'sick_leave' | 'duty',
+    eventType: row.event_type as 'duty' | 'sick_leave' | 'tech_sprint' | 'vacation',
   };
   if (row.event_type === 'tech_sprint' && row.tech_sprint_type) {
-    return { ...base, techSprintSubtype: row.tech_sprint_type as 'web' | 'back' | 'qa' };
+    return { ...base, techSprintSubtype: row.tech_sprint_type as 'back' | 'qa' | 'web' };
   }
   return base;
 }

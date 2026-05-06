@@ -10,9 +10,8 @@
 import type { Task, TaskPosition } from '@/types';
 import type { QuarterlyAvailability } from '@/types/quarterly';
 
-import { normalizeQuarterlyAvailabilityToBoardEvents } from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
-
 import { PARTS_PER_DAY, WORKING_DAYS } from '@/constants';
+import { normalizeQuarterlyAvailabilityToBoardEvents } from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
 import { isTaskCompleted } from '@/features/task/utils/taskUtils';
 import {
   OCCUPANCY_ERROR_MESSAGES,

@@ -10,8 +10,8 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import { Icon } from '@/components/Icon';
 import { TextTooltip } from '@/components/TextTooltip';
-import { useI18n } from '@/contexts/LanguageContext';
 import { CARD_MARGIN, WORKING_DAYS, PARTS_PER_DAY, ZIndex } from '@/constants';
+import { useI18n } from '@/contexts/LanguageContext';
 import { SWIMLANE_TASK_DRAG_DATA_KIND } from '@/features/swimlane/utils/swimlaneDragIds';
 import { useTaskBarResize } from '@/features/task/hooks/useTaskBarResize';
 import { isEffectivelyQaTask } from '@/features/task/utils/taskUtils';

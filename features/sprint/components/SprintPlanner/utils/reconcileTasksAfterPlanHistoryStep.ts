@@ -4,17 +4,16 @@
  * Исполнители строки свимлейна → поля задачи (позиция — источник правды для раскладки).
  */
 
+import type { PlanHistoryAppliedPayload } from '@/lib/layers/application/mobx/stores/taskPositionsStore';
 import type { Developer, Task } from '@/types';
-
 import type { Dispatch, SetStateAction } from 'react';
 
 import { getTaskPoints, isEffectivelyQaTask } from '@/features/task/utils/taskUtils';
 import { updateIssueWorkForPhase } from '@/lib/beerTrackerApi';
-import type { PlanHistoryAppliedPayload } from '@/lib/layers/application/mobx/stores/taskPositionsStore';
 import { timeslotsToStoryPoints } from '@/lib/pointsUtils';
 
 type TaskRowPatch = Partial<
-  Pick<Task, 'storyPoints' | 'testPoints' | 'assignee' | 'assigneeName' | 'qaEngineer' | 'qaEngineerName'>
+  Pick<Task, 'assignee' | 'assigneeName' | 'qaEngineer' | 'qaEngineerName' | 'storyPoints' | 'testPoints'>
 >;
 
 function mergePatch(patches: Map<string, TaskRowPatch>, taskId: string, partial: TaskRowPatch): void {
