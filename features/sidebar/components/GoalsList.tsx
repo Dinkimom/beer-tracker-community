@@ -61,10 +61,11 @@ export function GoalsList({
           {/* Показываем все цели из списка */}
           {checklistItems.map((item, index) => {
             const isDeleting = deletingItems.has(item.id);
+            const isAnotherGoalEditing = editingId !== null && editingId !== item.id;
             return (
               <GoalItem
                 key={item.id}
-                canEdit={canEdit}
+                canEdit={canEdit && !isAnotherGoalEditing}
                 editingText={editingText}
                 index={index + 1}
                 isEditing={editingId === item.id}

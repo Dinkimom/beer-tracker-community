@@ -1,19 +1,16 @@
-import { canUsePlanner, resolveAccessProfile } from '@/lib/access/orgAccess';
-import { findUserByEmail } from '@/lib/auth';
+import { findUserByEmail, findUserById } from '@/lib/auth';
 import { createTrackerApiClient } from '@/lib/tracker-client';
 import {
   resolveTrackerCloudContextForProductOrganizationIdOnPrem,
   TrackerApiConfigError,
 } from '@/lib/trackerRequestConfig';
 
-import {
-  findRegistryEmployeeForTrackerSession,
-  registryStaffUidHasOverseerTeam,
-} from './registryEmployeeTrackerSessionLookup';
-import { trackerIdentityCandidatesFromMyself } from './trackerMyselfIdentity';
+import { provisionProductUserForTrackerJoin } from './provisionProductUserForTrackerJoin';
+import { trackerWorkEmailFromMyself } from './trackerMyselfIdentity';
 
 /**
  * Проверяет OAuth-токен трекера и возвращает id пользователя продукта для выдачи cookie-сессии (on-prem).
+ * Достаточно успешного GET /myself в контексте организации трекера из БД: дальнейшие ACL планера — в обычных API.
  */
 export async function resolveProductUserIdForOnPremTrackerSession(input: {
   oauthToken: string;
@@ -37,45 +34,35 @@ export async function resolveProductUserIdForOnPremTrackerSession(input: {
     throw new TrackerApiConfigError('Недействительный токен трекера.', 401);
   }
 
-  const candidates = trackerIdentityCandidatesFromMyself(myself);
-  let registryEmployee: Awaited<ReturnType<typeof findRegistryEmployeeForTrackerSession>> = null;
-  for (const c of candidates) {
-    registryEmployee = await findRegistryEmployeeForTrackerSession(c);
-    if (registryEmployee) {
-      break;
+  const emailNorm = trackerWorkEmailFromMyself(myself);
+  if (!emailNorm) {
+    throw new TrackerApiConfigError(
+      'В профиле трекера не указан email. Укажите email в Яндекс Трекере и повторите вход.',
+      422
+    );
+  }
+
+  let user = await findUserByEmail(emailNorm);
+  if (!user) {
+    try {
+      const { userId } = await provisionProductUserForTrackerJoin({
+        emailNorm,
+        organizationId: input.organizationProductId,
+        orgRole: 'member',
+      });
+      user = await findUserById(userId);
+    } catch {
+      throw new TrackerApiConfigError(
+        'Не удалось выдать учётку продукта. Попросите администратора проверить настройки.',
+        403
+      );
     }
   }
-
-  if (!registryEmployee) {
-    throw new TrackerApiConfigError(
-      'Пользователь не найден в реестре организации. Попросите администратора добавить вас в команду.',
-      403
-    );
-  }
-
-  if (!(await registryStaffUidHasOverseerTeam(registryEmployee.staffUid))) {
-    throw new TrackerApiConfigError(
-      'Нет доступа к планеру: сотрудник не назначен в команду.',
-      403
-    );
-  }
-
-  const emailNorm = registryEmployee.email?.trim().toLowerCase();
-  if (!emailNorm) {
-    throw new TrackerApiConfigError('У сотрудника в реестре не задан email.', 422);
-  }
-
-  const user = await findUserByEmail(emailNorm);
   if (!user) {
     throw new TrackerApiConfigError(
-      'Учётка продукта не выдана. Попросите администратора добавить вас в команду.',
+      'Не удалось выдать учётку продукта. Попросите администратора проверить настройки.',
       403
     );
-  }
-
-  const profile = await resolveAccessProfile(user.id, input.organizationProductId);
-  if (!profile || !canUsePlanner(profile)) {
-    throw new TrackerApiConfigError('Недостаточно прав для планера.', 403);
   }
 
   return { userId: user.id };

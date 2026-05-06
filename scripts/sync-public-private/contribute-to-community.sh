@@ -23,8 +23,9 @@
 #   COMMUNITY_PR_SKIP_FILE_LIMIT=1      disable max-files check
 #   COMMUNITY_PR_SKIP_SCOPE_FILTER=1   skip open-core path filter (dangerous; raw diff in preview)
 #   COMMUNITY_PR_DRY_RUN=1               only fetch + checks + print diff (no push / no gh)
-#   COMMUNITY_PR_CONFIRM_THRESHOLD=15   above this many paths, require COMMUNITY_PR_CONFIRM=1 to push
-#   COMMUNITY_PR_CONFIRM=1              you reviewed printed diff/stat and accept push + PR
+#   COMMUNITY_PR_CONFIRM_THRESHOLD=15   above this many paths, require confirm to push
+#   COMMUNITY_PR_CONFIRM=1              skip confirm (CI / non-interactive)
+#   Interactive: if stdin is a TTY, the script prompts y/N instead of requiring the env var
 #   COMMUNITY_PR_DIFF_PREVIEW_LINES=120  max lines of `git diff` preview printed before push
 #
 # Usage:
@@ -34,6 +35,10 @@
 # Interactive prompts (title + confirm) are handled by `community-pr-cli.ts` (`pnpm community:pr`).
 #
 set -euo pipefail
+
+# `git diff` to stderr is still a TTY under `pnpm community:pr`; git would invoke `less`
+# and block until the user quits the pager. Force non-interactive output.
+export GIT_PAGER=cat
 
 # `pnpm run community:pr -- "title"` forwards a literal `--` as $1; strip it.
 while [[ "${1:-}" == "--" ]]; do
@@ -338,10 +343,21 @@ fi
 
 if [[ "${file_count}" -gt "${CONFIRM_THRESHOLD}" ]] && [[ "${COMMUNITY_PR_CONFIRM:-}" != "1" ]]; then
   echo "" >&2
-  echo "Refusing push: ${file_count} paths exceed confirm threshold (${CONFIRM_THRESHOLD})." >&2
-  echo "Review the diff/stat above, then re-run with COMMUNITY_PR_CONFIRM=1 if this scope is intended." >&2
-  echo "To inspect only: add --dry-run or COMMUNITY_PR_DRY_RUN=1." >&2
-  exit 1
+  echo "Warning: ${file_count} open-core paths exceed confirm threshold (${CONFIRM_THRESHOLD})." >&2
+  if [[ -t 0 ]]; then
+    read -r -p "Push to fork and open PR anyway? [y/N] " reply
+    case "${reply}" in
+      [yY] | [yY][eE][sS]) ;;
+      *)
+        echo "Aborted." >&2
+        exit 1
+        ;;
+    esac
+  else
+    echo "Refusing push (non-interactive stdin). Set COMMUNITY_PR_CONFIRM=1 after reviewing the diff." >&2
+    echo "To inspect only: add --dry-run or COMMUNITY_PR_DRY_RUN=1." >&2
+    exit 1
+  fi
 fi
 
 git push -u "${FORK_REMOTE}" "${CURRENT_BRANCH}:${HEAD_BRANCH}"

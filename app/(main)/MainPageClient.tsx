@@ -256,6 +256,19 @@ export default function MainPageClient({ plannerBoardId, plannerSprintId }: Main
 
   const tasks = tasksData?.tasks || [];
   const sprintInfo = tasksData?.sprintInfo || null;
+  const effectiveSprintId = selectedSprintId ?? plannerSprintId ?? null;
+  const selectedSprintName =
+    sprintInfo?.name ?? sprints.find((s) => s.id === effectiveSprintId)?.name ?? null;
+
+  useEffect(() => {
+    if (activeMainPage !== 'sprints') return;
+    if (!selectedSprintName?.trim()) return;
+
+    document.title = selectedSprintName.trim();
+  }, [
+    activeMainPage,
+    selectedSprintName,
+  ]);
 
   // Цели спринта из таблицы sprint_goals (Delivery и Discovery)
   const shouldLoadGoals = !!shouldLoadSprintData && !!selectedSprintId;

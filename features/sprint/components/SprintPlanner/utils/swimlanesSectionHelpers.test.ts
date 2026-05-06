@@ -7,6 +7,7 @@ import {
   buildDeveloperAvailabilityMap,
   computeHoverConnectedTaskIds,
 } from '@/features/sprint/components/SprintPlanner/utils/swimlanesSectionHelpers';
+import { techSprintEntryToBoardEvent, vacationEntryToBoardEvent } from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
 
 describe('buildDeveloperAvailabilityMap', () => {
   it('returns empty when availability is missing', () => {
@@ -43,9 +44,29 @@ describe('buildDeveloperAvailabilityMap', () => {
       { id: 'u3' },
     ]);
     expect(map.size).toBe(2);
-    expect(map.get('u1')?.techSprints).toHaveLength(1);
-    expect(map.get('u2')?.vacations).toHaveLength(1);
+    expect(map.get('u1')?.boardEvents).toEqual([techSprintEntryToBoardEvent(availability.techSprints[0]!)]);
+    expect(map.get('u2')?.boardEvents).toEqual([vacationEntryToBoardEvent(availability.vacations[0]!)]);
     expect(map.has('u3')).toBe(false);
+  });
+
+  it('prefers boardEvents when provided', () => {
+    const availability: QuarterlyAvailability = {
+      boardEvents: [
+        {
+          id: 'b1',
+          memberId: 'u9',
+          memberName: 'X',
+          startDate: '2025-03-01',
+          endDate: '2025-03-02',
+          eventType: 'duty',
+        },
+      ],
+      planId: 'p1',
+      techSprints: [],
+      vacations: [],
+    };
+    const map = buildDeveloperAvailabilityMap(availability, [{ id: 'u9' }]);
+    expect(map.get('u9')?.boardEvents).toEqual(availability.boardEvents);
   });
 });
 

@@ -12,12 +12,15 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 interface OccupancyAssigneeFilterProps {
   developers: Developer[];
   selectedAssigneeIds: Set<string>;
+  /** Ограничение ширины триггера в плотных тулбарах (truncate подписи) */
+  className?: string;
   onSelectionChange: (selectedIds: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
 }
 
 export function OccupancyAssigneeFilter({
   developers,
   selectedAssigneeIds,
+  className,
   onSelectionChange,
 }: OccupancyAssigneeFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -94,10 +97,10 @@ export function OccupancyAssigneeFilter({
         : `${selectedAssigneeIds.size} исполнителей`;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={`relative min-w-0 ${className ?? ''}`}>
       <Button
         ref={buttonRef}
-        className={`!h-8 !gap-2 !px-3 !py-0 text-sm font-medium ${
+        className={`w-full max-w-full min-w-0 !h-8 !justify-start !gap-2 !px-3 !py-0 text-sm font-medium ${
           selectedAssigneeIds.size > 0
             ? '!border-blue-300 !bg-blue-50 !text-blue-700 dark:!border-blue-700 dark:!bg-blue-900/30 dark:!text-blue-300'
             : 'hover:!bg-gray-50 dark:hover:!bg-gray-600'
@@ -107,7 +110,7 @@ export function OccupancyAssigneeFilter({
         onClick={() => setIsOpen(!isOpen)}
       >
         <Icon className="h-4 w-4 shrink-0" name="user" />
-        <span className="whitespace-nowrap">{displayText}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{displayText}</span>
         <Icon
           className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${
             isOpen ? 'rotate-180' : ''

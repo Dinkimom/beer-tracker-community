@@ -40,6 +40,18 @@ const TYPE_CONFIG = {
     borderClass: 'border-2 border-amber-400/90 dark:border-amber-600',
     textClass: 'text-amber-900 dark:text-amber-100',
   },
+  sick_leave: {
+    label: 'Больничный',
+    bgClass: 'bg-rose-100 dark:bg-rose-900/70',
+    borderClass: 'border-2 border-rose-400/90 dark:border-rose-600',
+    textClass: 'text-rose-900 dark:text-rose-100',
+  },
+  duty: {
+    label: 'Дежурство',
+    bgClass: 'bg-violet-100 dark:bg-violet-900/70',
+    borderClass: 'border-2 border-violet-400/90 dark:border-violet-600',
+    textClass: 'text-violet-900 dark:text-violet-100',
+  },
   'tech-sprint-web': {
     label: 'Техспринт (Web)',
     bgClass: 'bg-sky-100 dark:bg-sky-900/70',

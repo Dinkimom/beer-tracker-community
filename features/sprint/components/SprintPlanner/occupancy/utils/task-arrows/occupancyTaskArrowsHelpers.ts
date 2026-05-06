@@ -1,9 +1,17 @@
 import type { Task, TaskPosition } from '@/types';
 
+import { PARTS_PER_DAY } from '@/constants';
 import { positionToEndCell, positionToStartCell } from '@/features/sprint/utils/occupancyUtils';
 import { TASK_ARROWS_DEV_QA_LINK_PREFIX } from '@/features/swimlane/utils/task-arrows/taskArrowsHelpers';
 
 export interface OccupancyTaskLink { fromTaskId: string; id: string; toTaskId: string }
+
+export interface OccupancySegmentArrowLink {
+  endElement: string;
+  id: string;
+  startElement: string;
+  taskId: string;
+}
 
 /** Подпись позиций для зависимости: при схлопывании/изменении отрезков перерисовываем стрелки */
 export function getOccupancyTaskPositionsSignature(
@@ -13,6 +21,14 @@ export function getOccupancyTaskPositionsSignature(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([id, pos]) => `${id}:${positionToStartCell(pos)}-${positionToEndCell(pos)}`);
   return entries.join('|');
+}
+
+export function getOccupancySegmentStartAnchorId(taskId: string, segmentIndex: number): string {
+  return `occupancy-segment-start-${taskId}-${segmentIndex}`;
+}
+
+export function getOccupancySegmentEndAnchorId(taskId: string, segmentIndex: number): string {
+  return `occupancy-segment-end-${taskId}-${segmentIndex}`;
 }
 
 export function filterOccupancyUserTaskLinks(
@@ -33,20 +49,17 @@ export function filterOccupancyUserTaskLinks(
 }
 
 export function buildOccupancyDevToQaLinks(
-  taskLinks: Array<{ fromTaskId: string; toTaskId: string }>,
   devToQaTaskId: Map<string, string>,
   taskPositions: Map<string, TaskPosition>,
   taskIdsOrder: string[]
 ): OccupancyTaskLink[] {
-  const existingPair = new Set(taskLinks.map((l) => `${l.fromTaskId}-${l.toTaskId}`));
   const out: OccupancyTaskLink[] = [];
   devToQaTaskId.forEach((qaTaskId, devTaskId) => {
     const bothInPlan = taskPositions.has(devTaskId) && taskPositions.has(qaTaskId);
     if (
       bothInPlan &&
       taskIdsOrder.indexOf(devTaskId) !== -1 &&
-      taskIdsOrder.indexOf(qaTaskId) !== -1 &&
-      !existingPair.has(`${devTaskId}-${qaTaskId}`)
+      taskIdsOrder.indexOf(qaTaskId) !== -1
     ) {
       out.push({
         id: `${TASK_ARROWS_DEV_QA_LINK_PREFIX}${devTaskId}`,
@@ -56,6 +69,37 @@ export function buildOccupancyDevToQaLinks(
     }
   });
   return out;
+}
+
+export function buildOccupancySegmentArrowLinks(
+  taskPositions: Map<string, TaskPosition>,
+  taskIdsOrder: string[]
+): OccupancySegmentArrowLink[] {
+  const links: OccupancySegmentArrowLink[] = [];
+
+  for (const taskId of taskIdsOrder) {
+    const segments = taskPositions.get(taskId)?.segments;
+    if (!segments || segments.length < 2) continue;
+
+    const sortedSegments = segments
+      .map((segment) => ({
+        startCell: segment.startDay * PARTS_PER_DAY + segment.startPart,
+      }))
+      .sort((a, b) => a.startCell - b.startCell);
+
+    for (let i = 0; i < sortedSegments.length - 1; i += 1) {
+      const fromIndex = i;
+      const toIndex = i + 1;
+      links.push({
+        endElement: getOccupancySegmentStartAnchorId(taskId, toIndex),
+        id: `segment-${taskId}-${fromIndex}-${toIndex}`,
+        startElement: getOccupancySegmentEndAnchorId(taskId, fromIndex),
+        taskId,
+      });
+    }
+  }
+
+  return links;
 }
 
 export function getOccupancyRowTaskIds(

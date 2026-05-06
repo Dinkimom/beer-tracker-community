@@ -38,7 +38,8 @@ export interface UseSprintPlannerAssigneePickerParams {
     position: TaskPosition,
     isQa: boolean,
     devKey?: string,
-    force?: boolean
+    force?: boolean,
+    options?: { recordHistory?: boolean }
   ) => Promise<void>;
 }
 
@@ -173,7 +174,9 @@ export function useSprintPlannerAssigneePicker({
         );
       }
 
-      savePosition(updated, isQa, isQa ? assigneePicker.task.originalTaskId : undefined, true);
+      savePosition(updated, isQa, isQa ? assigneePicker.task.originalTaskId : undefined, true, {
+        recordHistory: true,
+      });
       setAssigneePicker(null);
     },
     [

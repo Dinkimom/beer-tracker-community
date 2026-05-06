@@ -68,6 +68,8 @@ function OccupancyPhaseBarInner({
   pointerEventsNone,
   position,
   readonly = false,
+  segmentEndAnchorId,
+  segmentStartAnchorId,
   showEndAnchor = true,
   showPhaseId = true,
   showStartAnchor = true,
@@ -377,6 +379,8 @@ function OccupancyPhaseBarInner({
         qaStripedStyle={qaStripedStyle}
         readonly={readonly}
         resizeSide={resizeSide}
+        segmentEndAnchorId={segmentEndAnchorId}
+        segmentStartAnchorId={segmentStartAnchorId}
         setHoverLeft={setHoverLeft}
         setHoverRight={setHoverRight}
         showEndAnchor={showEndAnchor}

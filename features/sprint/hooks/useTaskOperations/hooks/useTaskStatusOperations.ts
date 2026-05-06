@@ -12,6 +12,7 @@ import { getIssueTransitions, changeIssueStatus } from '@/lib/beerTrackerApi';
 import { mapStatus } from '@/utils/statusMapper';
 
 import { findTaskById, updateTaskInArray } from '../utils/taskUtils';
+import { getTaskTrackerDisplayKey } from '@/features/task/utils/taskUtils';
 
 interface UseTaskStatusOperationsProps {
   tasks: Task[];
@@ -35,13 +36,18 @@ export function useTaskStatusOperations({
         return;
       }
 
+      // В Tracker для запросов переходов/статуса нужен issue key.
+      // Для QA-псевдо/синтетических задач в UI может прилетать "внутренний" id,
+      // поэтому берём tracker key из originalTaskId.
+      const trackerIssueKey = getTaskTrackerDisplayKey(currentTask);
+
       // Определяем целевой статус
       let finalTargetStatusKey: string | null = targetStatusKey || null;
       let transitionData: { to?: { key?: string } } | null = null;
 
       if (!finalTargetStatusKey) {
         try {
-          const transitions = await getIssueTransitions(taskId);
+          const transitions = await getIssueTransitions(trackerIssueKey);
           transitionData = Array.isArray(transitions)
             ? transitions.find(
                 (t: { id?: string; key?: string; to?: { key?: string } }) =>
@@ -82,7 +88,7 @@ export function useTaskStatusOperations({
       // Асинхронно отправляем запрос на изменение статуса
       try {
         const resolution = isClosing ? 'fixed' : undefined;
-        const success = await changeIssueStatus(taskId, transitionId, resolution, extraFields);
+        const success = await changeIssueStatus(trackerIssueKey, transitionId, resolution, extraFields);
 
         if (!success) {
           throw new Error(`Failed to change status for task ${taskId}`);

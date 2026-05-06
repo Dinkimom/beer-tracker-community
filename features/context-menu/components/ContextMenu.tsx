@@ -87,6 +87,7 @@ export function ContextMenu({
     isStatusMenuOpen,
     isSprintMenuOpen,
     isEstimateMenuOpen,
+    taskIdForActions,
     availableSprints,
     DialogComponent,
     handleStatusMenuToggle,
@@ -190,7 +191,7 @@ export function ContextMenu({
             isOpen={isStatusMenuOpen}
             menuRef={menuRef}
             task={task}
-            taskIdForActions={task.id}
+            taskIdForActions={taskIdForActions}
             onSelect={handleStatusSelect}
             onToggle={handleStatusMenuToggle}
           />

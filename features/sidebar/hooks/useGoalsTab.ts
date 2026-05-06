@@ -58,9 +58,10 @@ export function useGoalsTab({
 
   const handleStartEdit = useCallback((item: ChecklistItem) => {
     if (!canEdit) return;
+    if (editingId && editingId !== item.id) return;
     setEditingId(item.id);
     setEditingText(item.text);
-  }, [canEdit]);
+  }, [canEdit, editingId]);
 
   const handleCancelEdit = useCallback(() => {
     if (newGoalId && editingId === newGoalId) {
@@ -102,11 +103,12 @@ export function useGoalsTab({
 
   const handleAddNewGoal = useCallback(() => {
     if (!canEdit) return;
+    if (editingId) return;
     const tempId = `new-${Date.now()}`;
     setEditingText('');
     setNewGoalId(tempId);
     setEditingId(tempId);
-  }, [canEdit]);
+  }, [canEdit, editingId]);
 
   const handleDeleteGoal = useCallback(async (itemId: string) => {
     if (!canEdit || !onDeleteGoal) return;

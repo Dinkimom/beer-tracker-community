@@ -5,9 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { PARTS_PER_DAY } from '@/constants';
 import {
   buildOccupancyDevToQaLinks,
+  buildOccupancySegmentArrowLinks,
   filterOccupancyUserTaskLinks,
   getLeftmostTaskIdInRow,
   getOccupancyRowTaskIds,
+  getOccupancySegmentEndAnchorId,
+  getOccupancySegmentStartAnchorId,
   getOccupancyTaskPositionsSignature,
   getRightmostTaskIdInRow,
   resolveOccupancyArrowEndpoints,
@@ -51,15 +54,66 @@ describe('filterOccupancyUserTaskLinks', () => {
 
 describe('buildOccupancyDevToQaLinks', () => {
   it('adds synthetic link when both in plan and ordered', () => {
-    const taskLinks: Array<{ fromTaskId: string; toTaskId: string }> = [];
     const devToQa = new Map([['d1', 'q1']]);
     const positions = new Map<string, TaskPosition>([
       ['d1', posFromCells(0, 1)],
       ['q1', posFromCells(2, 3)],
     ]);
-    const out = buildOccupancyDevToQaLinks(taskLinks, devToQa, positions, ['d1', 'q1']);
+    const out = buildOccupancyDevToQaLinks(devToQa, positions, ['d1', 'q1']);
     expect(out).toHaveLength(1);
     expect(out[0]!.id).toBe(`${TASK_ARROWS_DEV_QA_LINK_PREFIX}d1`);
+  });
+
+  it('keeps synthetic dev-QA link when the same pair exists in persisted links', () => {
+    const devToQa = new Map([['d1', 'q1']]);
+    const positions = new Map<string, TaskPosition>([
+      ['d1', posFromCells(0, 1)],
+      ['q1', posFromCells(2, 3)],
+    ]);
+    const persistedLinks = [{ fromTaskId: 'd1', id: 'persisted', toTaskId: 'q1' }];
+    expect(filterOccupancyUserTaskLinks(persistedLinks, ['d1', 'q1'], devToQa)).toHaveLength(0);
+
+    const out = buildOccupancyDevToQaLinks(devToQa, positions, ['d1', 'q1']);
+    expect(out).toEqual([
+      {
+        fromTaskId: 'd1',
+        id: `${TASK_ARROWS_DEV_QA_LINK_PREFIX}d1`,
+        toTaskId: 'q1',
+      },
+    ]);
+  });
+});
+
+describe('buildOccupancySegmentArrowLinks', () => {
+  it('adds dashed-arrow endpoints between sorted fragments of the same task', () => {
+    const positions = new Map<string, TaskPosition>([
+      [
+        'task-1',
+        {
+          ...posFromCells(0, 6),
+          segments: [
+            { duration: 1, startDay: 1, startPart: 0 },
+            { duration: 1, startDay: 0, startPart: 0 },
+            { duration: 1, startDay: 2, startPart: 0 },
+          ],
+        },
+      ],
+    ]);
+
+    expect(buildOccupancySegmentArrowLinks(positions, ['task-1'])).toEqual([
+      {
+        endElement: getOccupancySegmentStartAnchorId('task-1', 1),
+        id: 'segment-task-1-0-1',
+        startElement: getOccupancySegmentEndAnchorId('task-1', 0),
+        taskId: 'task-1',
+      },
+      {
+        endElement: getOccupancySegmentStartAnchorId('task-1', 2),
+        id: 'segment-task-1-1-2',
+        startElement: getOccupancySegmentEndAnchorId('task-1', 1),
+        taskId: 'task-1',
+      },
+    ]);
   });
 });
 

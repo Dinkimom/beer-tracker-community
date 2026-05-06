@@ -7,9 +7,9 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { boardId, sprintId } = await params;
+  await params;
   return {
-    title: `Спринты · доска ${boardId} · спринт ${sprintId}`,
+    title: 'Спринты',
   };
 }
 

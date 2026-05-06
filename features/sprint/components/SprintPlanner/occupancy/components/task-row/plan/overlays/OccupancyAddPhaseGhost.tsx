@@ -4,7 +4,7 @@ import type { Developer, Task, TaskPosition } from '@/types';
 
 import { Avatar } from '@/components/Avatar';
 import { usePhaseCardColorScheme } from '@/components/PhaseCardColorSchemeContext';
-import { PARTS_PER_DAY } from '@/constants';
+import { PARTS_PER_DAY, ZIndex } from '@/constants';
 import { positionToEndCell } from '@/features/sprint/utils/occupancyUtils';
 import { getTaskCardStyles } from '@/features/task/components/TaskCard/components/TaskCardBody';
 import { getTaskPoints, isQaOnlyTask } from '@/features/task/utils/taskUtils';
@@ -114,6 +114,7 @@ export function OccupancyAddPhaseGhost({
     <div
       aria-hidden
       className="absolute inset-0 pointer-events-none opacity-50"
+      style={{ zIndex: ZIndex.contentInteractive }}
     >
       <div
         className={`absolute flex items-center justify-center rounded-lg border-2 ${cardStyles.teamColor} ${cardStyles.teamBorder}`}
@@ -122,7 +123,6 @@ export function OccupancyAddPhaseGhost({
           right: `calc(${rightPercent}% + ${PHASE_PLAN_ROW_INSET_PX}px)`,
           height: phaseBarHeightPx,
           top: phaseBarTopOffsetPx,
-          zIndex: 1,
         }}
       >
         <Avatar

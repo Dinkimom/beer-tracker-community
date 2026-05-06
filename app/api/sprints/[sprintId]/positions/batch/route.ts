@@ -11,6 +11,7 @@ import { updateIssueAssignee } from '@/lib/trackerApi';
 import { loadTrackerIntegrationForTrackerPatch } from '@/lib/trackerIntegration';
 import { buildIssueAssigneePatch } from '@/lib/trackerIntegration/buildIssueAssigneePatch';
 import { BatchPositionsSchema, formatValidationError, validateRequest } from '@/lib/validation';
+import { syncPlannedDatesToTracker } from '../plannedDateSync';
 
 /**
  * Батч сохранение позиций задач в спринте
@@ -212,6 +213,25 @@ export async function POST(
         );
       } catch (err) {
         console.error('[sync assignee → tracker] POST /sprints/.../positions/batch', err);
+      }
+
+      // Синхронизируем запланированные даты в Tracker для всех позиций,
+      // где client прислал plannedStartDay/plannedStartPart.
+      try {
+        const toSyncDates = positions.filter(
+          (pos) => pos.plannedStartDay != null && pos.plannedStartPart != null
+        );
+
+        if (toSyncDates.length > 0) {
+          await syncPlannedDatesToTracker({
+            organizationId,
+            positions: toSyncDates,
+            request,
+            sprintId,
+          });
+        }
+      } catch (err) {
+        console.error('[sync planned dates → tracker] POST /sprints/.../positions/batch', err);
       }
 
       return NextResponse.json({

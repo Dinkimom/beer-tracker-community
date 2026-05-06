@@ -158,6 +158,73 @@ export function getDayDate(
   return d;
 }
 
+export function getPlannedPositionCellRange(
+  position: {
+    duration: number;
+    plannedStartDay?: number | null;
+    plannedStartPart?: number | null;
+    plannedDuration?: number | null;
+    segments?: PhaseSegment[] | null;
+  }
+): { endCell: number; startCell: number } | null {
+  if (position.segments && position.segments.length > 0) {
+    const ranges = position.segments
+      .filter((seg) => seg.duration > 0)
+      .map((seg) => {
+        const startCell = seg.startDay * PARTS_PER_DAY + seg.startPart;
+        return { endCell: startCell + seg.duration, startCell };
+      });
+
+    if (ranges.length === 0) return null;
+
+    return {
+      endCell: Math.max(...ranges.map((range) => range.endCell)),
+      startCell: Math.min(...ranges.map((range) => range.startCell)),
+    };
+  }
+
+  const { plannedStartDay, plannedStartPart, plannedDuration, duration } = position;
+
+  if (plannedStartDay == null || plannedStartPart == null) return null;
+  const plannedDurationParts = plannedDuration ?? duration;
+  if (plannedDurationParts <= 0) return null;
+
+  const startCell = plannedStartDay * PARTS_PER_DAY + plannedStartPart;
+  return { endCell: startCell + plannedDurationParts, startCell };
+}
+
+export function getPlannedCellRangeDateRange(
+  range: { endCell: number; startCell: number },
+  sprintStartDate: Date,
+  workingDaysCount: number
+): { startDate: Date; endDate: Date } | null {
+  if (range.endCell <= range.startCell) return null;
+  const startDayIndex = Math.floor(range.startCell / PARTS_PER_DAY);
+  const lastCellIndexInclusive = range.endCell - 1;
+  const endDayIndex = Math.floor(lastCellIndexInclusive / PARTS_PER_DAY);
+
+  const startDate = getDayDate(sprintStartDate, startDayIndex, workingDaysCount);
+  const endDate = getDayDate(sprintStartDate, endDayIndex, workingDaysCount);
+
+  return { startDate, endDate };
+}
+
+export function getPlannedPositionDateRange(
+  position: {
+    duration: number;
+    plannedStartDay?: number | null;
+    plannedStartPart?: number | null;
+    plannedDuration?: number | null;
+    segments?: PhaseSegment[] | null;
+  },
+  sprintStartDate: Date,
+  workingDaysCount: number
+): { startDate: Date; endDate: Date } | null {
+  const range = getPlannedPositionCellRange(position);
+  if (!range) return null;
+  return getPlannedCellRangeDateRange(range, sprintStartDate, workingDaysCount);
+}
+
 /** При cellsPerDay===1 одна ячейка = один день (dayIndex — индекс дня). */
 export function isCellOccupiedByTask(
   dayIndex: number,

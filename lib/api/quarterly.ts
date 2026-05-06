@@ -4,7 +4,11 @@
 
 import type { StoryPhasePosition } from '@/features/quarterly-planning-v2/types';
 import type { Developer } from '@/types';
-import type { VacationEntry } from '@/types/quarterly';
+import type {
+  BoardAvailabilityEvent,
+  BoardAvailabilityEventType,
+  TechSprintType,
+} from '@/types/quarterly';
 
 import { getPlannerBeerTrackerApi } from '../plannerBeerTrackerApiOverride';
 
@@ -65,61 +69,65 @@ export async function saveQuarterlyPlanV2(
   return { success: true, planId: data.planId };
 }
 
-export async function fetchVacationEntriesForMember(options: {
+export async function fetchBoardAvailabilityEventsForMember(options: {
   boardId: number;
   memberId: string;
-}): Promise<VacationEntry[]> {
+}): Promise<BoardAvailabilityEvent[]> {
   const { boardId, memberId } = options;
-  const { data } = await getPlannerBeerTrackerApi().get<{ vacations: VacationEntry[] }>(
-    `/quarterly-plans/availability/vacations?boardId=${boardId}&memberId=${encodeURIComponent(memberId)}`
+  const { data } = await getPlannerBeerTrackerApi().get<{ events: BoardAvailabilityEvent[] }>(
+    `/quarterly-plans/availability/board-events?boardId=${boardId}&memberId=${encodeURIComponent(memberId)}`
   );
-  return data.vacations ?? [];
+  return data.events ?? [];
 }
 
-export async function fetchVacationEntriesForBoard(boardId: number): Promise<VacationEntry[]> {
-  const { data } = await getPlannerBeerTrackerApi().get<{ vacations: VacationEntry[] }>(
-    `/quarterly-plans/availability/vacations?boardId=${boardId}`
+export async function fetchBoardAvailabilityEventsForBoard(boardId: number): Promise<BoardAvailabilityEvent[]> {
+  const { data } = await getPlannerBeerTrackerApi().get<{ events: BoardAvailabilityEvent[] }>(
+    `/quarterly-plans/availability/board-events?boardId=${boardId}`
   );
-  return data.vacations ?? [];
+  return data.events ?? [];
 }
 
-export async function createVacationEntry(options: {
+export async function createBoardAvailabilityEvent(options: {
   boardId: number;
+  endDate: string;
+  eventType: BoardAvailabilityEventType;
   memberId: string;
   memberName: string;
   startDate: string;
-  endDate: string;
-}): Promise<VacationEntry> {
-  const { data } = await getPlannerBeerTrackerApi().post<VacationEntry>(
-    '/quarterly-plans/availability/vacations',
+  techSprintSubtype?: TechSprintType;
+}): Promise<BoardAvailabilityEvent> {
+  const { data } = await getPlannerBeerTrackerApi().post<BoardAvailabilityEvent>(
+    '/quarterly-plans/availability/board-events',
     options
   );
   return data;
 }
 
-export async function updateVacationEntry(options: {
+export async function updateBoardAvailabilityEvent(options: {
   boardId: number;
   endDate: string;
+  eventType: BoardAvailabilityEventType;
   id: string;
   memberId: string;
   memberName: string;
   startDate: string;
-}): Promise<VacationEntry> {
-  const { data } = await getPlannerBeerTrackerApi().patch<VacationEntry>(
-    '/quarterly-plans/availability/vacations',
+  techSprintSubtype?: TechSprintType;
+}): Promise<BoardAvailabilityEvent> {
+  const { data } = await getPlannerBeerTrackerApi().patch<BoardAvailabilityEvent>(
+    '/quarterly-plans/availability/board-events',
     options
   );
   return data;
 }
 
-export async function deleteVacationEntry(options: {
+export async function deleteBoardAvailabilityEvent(options: {
   boardId: number;
   id: string;
   memberId: string;
 }): Promise<{ deleted: number; success: boolean }> {
   const { boardId, id, memberId } = options;
   const { data } = await getPlannerBeerTrackerApi().delete<{ deleted: number; success: boolean }>(
-    `/quarterly-plans/availability/vacations?id=${encodeURIComponent(id)}&boardId=${boardId}&memberId=${encodeURIComponent(memberId)}`
+    `/quarterly-plans/availability/board-events?id=${encodeURIComponent(id)}&boardId=${boardId}&memberId=${encodeURIComponent(memberId)}`
   );
   return data;
 }

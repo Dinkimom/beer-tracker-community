@@ -17,6 +17,23 @@ import {
 
 import { TaskCardContent } from './TaskCardContent';
 
+function getIncidentSeverityTagClasses(severity: string): string {
+  const severityUpper = severity.toUpperCase();
+  if (severityUpper === 'S1' || severityUpper === 'P0' || severityUpper === 'P1') {
+    return 'bg-red-600 text-white border-red-800 dark:bg-red-950 dark:text-red-200 dark:border-red-500/90 incident-fire-badge';
+  }
+  if (severityUpper === 'S2' || severityUpper === 'P2') {
+    return 'bg-orange-500 text-white border-orange-700 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-400/90';
+  }
+  if (severityUpper === 'S3' || severityUpper === 'P3') {
+    return 'bg-amber-400 text-amber-950 border-amber-700 dark:bg-yellow-950 dark:text-yellow-100 dark:border-yellow-500/80';
+  }
+  if (severityUpper === 'S4' || severityUpper === 'P4') {
+    return 'bg-gray-500 text-white border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500';
+  }
+  return 'bg-gray-500 text-white border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500';
+}
+
 interface TaskCardBodyProps {
   assigneeName?: string;
   developers?: Developer[];
@@ -94,7 +111,11 @@ export function TaskCardBody({
       />
 
       {/* Оценка SP/TP — строка под названием для swimlane */}
-      {variant === 'swimlane' && !isVeryNarrow && ((swimlaneCardFields?.showStatus ?? true) || (swimlaneCardFields?.showEstimates ?? true)) && (
+      {variant === 'swimlane' &&
+        !isVeryNarrow &&
+        ((swimlaneCardFields?.showStatus ?? true) ||
+          (swimlaneCardFields?.showSeverity ?? true) ||
+          (swimlaneCardFields?.showEstimates ?? true)) && (
         <div className="flex items-center gap-1.5 mt-auto pt-1 shrink-0 flex-wrap">
           {(swimlaneCardFields?.showStatus ?? true) && (
             <StatusTag
@@ -102,6 +123,14 @@ export function TaskCardBody({
               status={task.originalStatus}
               statusColorKey={task.statusColorKey}
             />
+          )}
+          {(swimlaneCardFields?.showSeverity ?? true) && task.incidentSeverity && (
+            <span
+              className={`text-[10px] font-bold leading-none whitespace-nowrap px-1.5 py-0.5 rounded shrink-0 border ${getIncidentSeverityTagClasses(task.incidentSeverity)}`}
+              title={`Критичность: ${task.incidentSeverity}`}
+            >
+              {task.incidentSeverity}
+            </span>
           )}
           {(swimlaneCardFields?.showEstimates ?? true) && (
             <span className={`${assigneeTextSize} text-gray-600 dark:text-gray-300`}>

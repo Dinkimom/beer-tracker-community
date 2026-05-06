@@ -1,9 +1,9 @@
 'use client';
 
 import type { Task } from '@/types';
-import type { ChecklistItem, SprintListItem } from '@/types/tracker';
+import type { ChecklistItem, SprintInfo, SprintListItem } from '@/types/tracker';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@/components/Button';
@@ -32,7 +32,7 @@ interface FinishSprintModalProps {
   sprints: SprintListItem[];
   tasks: Task[];
   onClose: () => void;
-  onSprintStatusChange?: () => void;
+  onSprintStatusChange?: (updatedSprint: SprintInfo) => void;
   onTasksReload?: () => void;
 }
 
@@ -57,24 +57,6 @@ export function FinishSprintModal({
       ),
     [goalTasks]
   );
-  const [isDark, setIsDark] = useState(false);
-
-  // Отслеживаем изменение темы
-  useEffect(() => {
-    const checkTheme = () => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-
-    checkTheme();
-    const observer = new MutationObserver(checkTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class'],
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
   const finishSprint = useFinishSprintModal({
     goalTasks: goalTasks.map((g) => ({ id: g.id, source: g.source })),
     initialChecklistItems,
@@ -122,7 +104,6 @@ export function FinishSprintModal({
             {/* Перенос незавершенных задач */}
             <FinishSprintTaskTransfer
               draftSprints={draftSprints}
-              isDark={isDark}
               moveTasksTo={finishSprint.moveTasksTo}
               selectedSprintId={finishSprint.selectedSprintId}
               onMoveTasksToChange={finishSprint.setMoveTasksTo}

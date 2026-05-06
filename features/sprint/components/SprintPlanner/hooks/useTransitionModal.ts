@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react';
 
 import { findTaskById } from '@/features/sprint/hooks/useTaskOperations/utils/taskUtils';
 import { fetchScreenFields, getTransitionFields, type TransitionField } from '@/lib/beerTrackerApi';
+import { getTaskTrackerDisplayKey } from '@/features/task/utils/taskUtils';
 
 interface TransitionModalState {
   fields: TransitionField[];
@@ -57,12 +58,14 @@ export function useTransitionModal({
       const cached = byType?.[transitionId] ?? [];
       const skipFetch = cached.length > 0 && !cached.some((f) => f.required);
 
+      const trackerIssueKey = getTaskTrackerDisplayKey(task);
+
       // Enriched-поля (schemaType, options для select) — когда нужна модалка или нет кэша
       const fields: TransitionField[] = skipFetch
         ? cached
         : screenId
           ? await fetchScreenFields(screenId)
-          : await getTransitionFields(taskId, transitionId);
+          : await getTransitionFields(trackerIssueKey, transitionId);
 
       if (fields.some((f) => f.required)) {
         setTransitionModal({

@@ -3,7 +3,7 @@ import type { Task } from '@/types';
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
-import { patchSprintTasksQuery, sprintTasksQueryKey } from './useTasks';
+import { patchSprintInfoInTasksQueries, patchSprintTasksQuery, sprintTasksQueryKey } from './useTasks';
 
 describe('sprintTasksQueryKey', () => {
   it('нормализует boardId: undefined → null в ключе', () => {
@@ -54,5 +54,47 @@ describe('patchSprintTasksQuery', () => {
     patchSprintTasksQuery(qc, 5, 1, (prev) => [...prev, { id: 't2', name: 'Y' } as Task], true);
     const after = qc.getQueryData<{ tasks: Task[] }>(sprintTasksQueryKey(5, 1, true));
     expect(after?.tasks).toHaveLength(2);
+  });
+});
+
+describe('patchSprintInfoInTasksQueries', () => {
+  it('обновляет sprintInfo во всех query текущего спринта', () => {
+    const qc = new QueryClient();
+    const currentBundle = {
+      developers: [],
+      sprintInfo: { id: 5, name: 'Sprint 5', status: 'draft', version: 1 },
+      tasks: [{ id: 't1', name: 'X' } as Task],
+    };
+    const otherBundle = {
+      developers: [],
+      sprintInfo: { id: 6, name: 'Sprint 6', status: 'draft', version: 1 },
+      tasks: [{ id: 't2', name: 'Y' } as Task],
+    };
+    qc.setQueryData(sprintTasksQueryKey(5, 1), currentBundle);
+    qc.setQueryData(sprintTasksQueryKey(5, 1, true), currentBundle);
+    qc.setQueryData(sprintTasksQueryKey(6, 1), otherBundle);
+
+    patchSprintInfoInTasksQueries(qc, {
+      id: 5,
+      name: 'Sprint 5',
+      status: 'in_progress',
+      startDate: '2026-05-01',
+      startDateTime: '2026-05-01T00:00:00.000+0000',
+      endDate: '2026-05-14',
+      endDateTime: '2026-05-14T00:00:00.000+0000',
+      version: 2,
+    });
+
+    expect(qc.getQueryData<typeof currentBundle>(sprintTasksQueryKey(5, 1))?.sprintInfo).toMatchObject({
+      status: 'in_progress',
+      version: 2,
+    });
+    expect(qc.getQueryData<typeof currentBundle>(sprintTasksQueryKey(5, 1, true))?.sprintInfo).toMatchObject({
+      status: 'in_progress',
+      version: 2,
+    });
+    expect(qc.getQueryData<typeof otherBundle>(sprintTasksQueryKey(6, 1))?.sprintInfo).toEqual(
+      otherBundle.sprintInfo
+    );
   });
 });

@@ -218,8 +218,9 @@ export function useContextMenu({
   const handleStatusSelect = (transitionId: string, targetStatusKey?: string, targetStatusDisplay?: string, screenId?: string) => {
     if (isLoading) return;
 
-    // Меняем статус той задачи, для которой открыто меню (task.id): для QA — сама QA-задача, для dev — dev-задача.
-    onStatusChange(task.id, transitionId, targetStatusKey, targetStatusDisplay, screenId).catch((error) => {
+    // Меняем статус "реальной" задачи в Tracker: для синтетической QA-строки — dev-задача (originalTaskId),
+    // иначе — сама задача.
+    onStatusChange(taskIdForActions, transitionId, targetStatusKey, targetStatusDisplay, screenId).catch((error) => {
       console.error('Failed to change status:', error);
     });
 
@@ -318,6 +319,7 @@ export function useContextMenu({
     isStatusMenuOpen,
     isSprintMenuOpen,
     isEstimateMenuOpen,
+    taskIdForActions,
     availableSprints,
     DialogComponent,
     handleStatusMenuToggle,

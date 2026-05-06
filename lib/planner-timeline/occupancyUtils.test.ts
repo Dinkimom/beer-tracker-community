@@ -6,6 +6,7 @@ import {
   cellsToSegments,
   getCombinedPhaseCellRange,
   getDayDate,
+  getPlannedPositionDateRange,
   getPhaseSegmentCellBlocks,
   getPositionEffectiveDuration,
   getPositionSegmentRanges,
@@ -171,6 +172,73 @@ describe('getDayDate', () => {
     const monday = new Date(2025, 0, 6);
     // day 5 uses sprintStart + 5 + 2 + 0 = +7 calendar days from Jan 6 -> Jan 13
     expect(getDayDate(monday, 5).getDate()).toBe(13);
+  });
+});
+
+describe('getPlannedPositionDateRange', () => {
+  it('returns null when plannedStartDay or plannedStartPart missing', () => {
+    const sprintStart = new Date(2025, 0, 6);
+    expect(
+      getPlannedPositionDateRange({ duration: 3, plannedStartDay: null, plannedStartPart: 0 }, sprintStart, 10)
+    ).toBeNull();
+    expect(
+      getPlannedPositionDateRange({ duration: 3, plannedStartDay: 0, plannedStartPart: null }, sprintStart, 10)
+    ).toBeNull();
+  });
+
+  it('respects plannedStartPart when computing inclusive end day', () => {
+    const sprintStart = new Date(2025, 0, 6); // Monday
+    // start: day 0, part 1; duration 2 => last cell: 0*3+1 +2-1 = 2 => still day 0
+    const range = getPlannedPositionDateRange(
+      { duration: 2, plannedStartDay: 0, plannedStartPart: 1, plannedDuration: 2 },
+      sprintStart,
+      10
+    );
+    expect(range?.startDate.getDate()).toBe(6);
+    expect(range?.endDate.getDate()).toBe(6);
+
+    // start: day 0, part 2; duration 2 => last cell: 0*3+2 +2-1 = 3 => day 1
+    const range2 = getPlannedPositionDateRange(
+      { duration: 2, plannedStartDay: 0, plannedStartPart: 2, plannedDuration: 2 },
+      sprintStart,
+      10
+    );
+    expect(range2?.startDate.getDate()).toBe(6);
+    expect(range2?.endDate.getDate()).toBe(7);
+  });
+
+  it('skips weekend when computing end day index', () => {
+    const sprintStart = new Date(2025, 0, 6); // Jan 6, 2025 (Monday)
+    // day 4 is Friday (Jan 10). part 2 (last part). duration 2 => spills into next working day:
+    // start cell=4*3+2=14; last cell=14+2-1=15; endDayIndex=floor(15/3)=5 => next Monday Jan 13
+    const range = getPlannedPositionDateRange(
+      { duration: 2, plannedStartDay: 4, plannedStartPart: 2, plannedDuration: 2 },
+      sprintStart,
+      10
+    );
+    expect(range?.startDate.getDate()).toBe(10);
+    expect(range?.endDate.getDate()).toBe(13);
+  });
+
+  it('uses segment span when phase is split into segments', () => {
+    const sprintStart = new Date(2025, 0, 6); // Monday
+    const range = getPlannedPositionDateRange(
+      {
+        duration: 1,
+        plannedStartDay: 0,
+        plannedStartPart: 0,
+        plannedDuration: 1,
+        segments: [
+          { duration: 1, startDay: 0, startPart: 2 },
+          { duration: 1, startDay: 2, startPart: 0 },
+        ],
+      },
+      sprintStart,
+      10
+    );
+
+    expect(range?.startDate.getDate()).toBe(6);
+    expect(range?.endDate.getDate()).toBe(8);
   });
 });
 

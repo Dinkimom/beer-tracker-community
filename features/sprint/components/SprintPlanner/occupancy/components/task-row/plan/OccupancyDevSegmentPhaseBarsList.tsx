@@ -5,6 +5,10 @@ import type { TaskPosition } from '@/types';
 import type React from 'react';
 
 import { mergeAdjacentSegments } from '@/features/sprint/utils/occupancyUtils';
+import {
+  getOccupancySegmentEndAnchorId,
+  getOccupancySegmentStartAnchorId,
+} from '@/features/sprint/components/SprintPlanner/occupancy/utils/task-arrows/occupancyTaskArrowsHelpers';
 import { getTeamTagClasses } from '@/utils/teamColors';
 
 import { OccupancyPhaseBar } from './OccupancyPhaseBar';
@@ -116,6 +120,8 @@ export function OccupancyDevSegmentPhaseBarsList({
         segmentBadge={
           devSegmentsSorted.length > 1 ? { index: idx + 1, total: devSegmentsSorted.length } : null
         }
+        segmentEndAnchorId={getOccupancySegmentEndAnchorId(task.id, idx)}
+        segmentStartAnchorId={getOccupancySegmentStartAnchorId(task.id, idx)}
         showEndAnchor={isLast}
         showPhaseId={isFirst}
         showStartAnchor={isFirst}

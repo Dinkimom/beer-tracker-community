@@ -5,6 +5,10 @@ import type { QuarterlyAvailability } from '@/types/quarterly';
 import { useMemo } from 'react';
 
 import { WORKING_DAYS } from '@/constants';
+import {
+  normalizeQuarterlyAvailabilityToBoardEvents,
+  quarterlyAvailabilityHasBlockingSegments,
+} from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
 import { buildAssigneeUnavailableDays, getOccupancyErrorDays, getOccupancyErrorDetailsByDay, getOccupancyErrorReasons, getOccupancyErrorTaskIds } from '@/features/sprint/utils/occupancyValidation';
 import { getSegmentsForDeveloper } from '@/features/swimlane/utils/availabilitySegments';
 
@@ -133,17 +137,17 @@ export function useOccupancyData({
   }, [developers]);
 
   const availabilityDevelopersWithSegments = useMemo(() => {
-    if (!availability || (availability.vacations.length === 0 && availability.techSprints.length === 0)) {
+    if (!availability || !quarterlyAvailabilityHasBlockingSegments(availability)) {
       return [];
     }
+    const boardEvents = normalizeQuarterlyAvailabilityToBoardEvents(availability);
     return developers
       .map((developer) => ({
         developer,
         segments: getSegmentsForDeveloper(
           developer.id,
           sprintStartDate,
-          availability.vacations,
-          availability.techSprints,
+          boardEvents,
           sprintWorkingDaysCount
         ),
       }))

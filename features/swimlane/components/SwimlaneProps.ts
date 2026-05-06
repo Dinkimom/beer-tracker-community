@@ -2,7 +2,7 @@ import type { SwimlaneInProgressFactSegment } from '@/features/swimlane/utils/me
 import type { TaskResizeParams } from '@/features/task/hooks/useTaskResize';
 import type { OccupancyErrorReason } from '@/lib/planner-timeline';
 import type { Comment, Developer, LayoutViewMode, PhaseSegment, Task, TaskPosition } from '@/types';
-import type { TechSprintEntry, VacationEntry } from '@/types/quarterly';
+import type { BoardAvailabilityEvent } from '@/types/quarterly';
 import type { ChangelogEntry, IssueComment } from '@/types/tracker';
 
 export interface SwimlaneProps {
@@ -15,8 +15,8 @@ export interface SwimlaneProps {
   contextMenuBlurOtherCards?: boolean;
   contextMenuTaskId?: string | null;
   developer: Developer;
-  /** Отпуска и техспринты исполнителя из квартального планирования */
-  developerAvailability?: { vacations: VacationEntry[]; techSprints: TechSprintEntry[] };
+  /** События доступности исполнителя (отпуск, техспринт, больничный, дежурство) */
+  developerAvailability?: { boardEvents: BoardAvailabilityEvent[] };
   developers: Developer[];
   // Отключить закрытие сайдбара при клике на свимлейн (полезно для спринт планера)
   disableCloseSidebarOnClick?: boolean;

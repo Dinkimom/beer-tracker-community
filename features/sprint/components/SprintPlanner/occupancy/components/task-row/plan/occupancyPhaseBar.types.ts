@@ -42,6 +42,8 @@ export interface OccupancyPhaseBarProps {
   readonly?: boolean;
   /** Несколько отрезков плана — бейдж «i/N» как на карточке свимлейна */
   segmentBadge?: { index: number; total: number } | null;
+  segmentEndAnchorId?: string;
+  segmentStartAnchorId?: string;
   showEndAnchor?: boolean;
   showPhaseId?: boolean;
   showStartAnchor?: boolean;

@@ -57,7 +57,7 @@ export interface UseSprintPlannerHandlersProps {
   debouncedUpdateXarrow: () => void;
   deleteComment: (commentId: string) => Promise<void>;
   deleteLink: (linkId: string) => Promise<void>;
-  deletePosition: (taskId: string) => Promise<void>;
+  deletePosition: (taskId: string, options?: { recordHistory?: boolean }) => Promise<void>;
   /** Кнопка + QA на dev-карточке без qaEngineer — открыть пикер исполнителя QA */
   onRequestQaEngineerPicker?: (devTaskId: string, anchorRect: DOMRect) => void;
   onTasksReload?: (options?: { showToast?: boolean }) => void;
@@ -66,7 +66,13 @@ export interface UseSprintPlannerHandlersProps {
     toTaskId: string;
     id: string;
   }) => Promise<void>;
-  savePosition: (position: TaskPosition, isQa: boolean) => Promise<void>;
+  savePosition: (
+    position: TaskPosition,
+    isQa: boolean,
+    devTaskKey?: string,
+    immediate?: boolean,
+    options?: { recordHistory?: boolean }
+  ) => Promise<void>;
   setComments: (updater: (prev: Comment[]) => Comment[]) => void;
   setSidebarOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setTaskLinks: (
@@ -77,7 +83,8 @@ export interface UseSprintPlannerHandlersProps {
   setTaskPositions: (
     updater: (
       prev: Map<string, TaskPosition>
-    ) => Map<string, TaskPosition>
+    ) => Map<string, TaskPosition>,
+    options?: { recordHistory?: boolean }
   ) => void;
   setTasks: (updater: (prev: Task[]) => Task[]) => void;
 }

@@ -1,9 +1,10 @@
 import type { Task, TaskPosition } from '@/types';
-import type { QuarterlyAvailability } from '@/types/quarterly';
+import type { BoardAvailabilityEvent, QuarterlyAvailability } from '@/types/quarterly';
+
+import { normalizeQuarterlyAvailabilityToBoardEvents } from '@/features/sprint/utils/quarterlyAvailabilityNormalize';
 
 export interface DeveloperAvailabilityRow {
-  techSprints: QuarterlyAvailability['techSprints'];
-  vacations: QuarterlyAvailability['vacations'];
+  boardEvents: BoardAvailabilityEvent[];
 }
 
 export function buildDeveloperAvailabilityMap(
@@ -13,12 +14,12 @@ export function buildDeveloperAvailabilityMap(
   const empty = new Map<string, DeveloperAvailabilityRow>();
   if (!availability) return empty;
 
+  const allEvents = normalizeQuarterlyAvailabilityToBoardEvents(availability);
   const map = new Map<string, DeveloperAvailabilityRow>();
   for (const dev of developers) {
-    const vacations = availability.vacations.filter((v) => v.memberId === dev.id);
-    const techSprints = availability.techSprints.filter((t) => t.memberId === dev.id);
-    if (vacations.length > 0 || techSprints.length > 0) {
-      map.set(dev.id, { vacations, techSprints });
+    const boardEvents = allEvents.filter((e) => e.memberId === dev.id);
+    if (boardEvents.length > 0) {
+      map.set(dev.id, { boardEvents });
     }
   }
   return map;

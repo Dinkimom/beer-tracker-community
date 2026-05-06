@@ -8,6 +8,7 @@ import Xarrow from 'react-xarrows';
 import { usePhaseCardColorScheme } from '@/components/PhaseCardColorSchemeContext';
 import { ZIndex } from '@/constants';
 import {
+  buildOccupancySegmentArrowLinks,
   buildOccupancyDevToQaLinks,
   filterOccupancyUserTaskLinks,
   getOccupancyRowTaskIds,
@@ -74,7 +75,6 @@ export function OccupancyTaskArrows({
 
   const userLinks = filterOccupancyUserTaskLinks(taskLinks, taskIdsOrder, devToQaTaskId);
   const devToQALinks = buildOccupancyDevToQaLinks(
-    taskLinks,
     devToQaTaskId,
     taskPositions,
     taskIdsOrder
@@ -82,6 +82,7 @@ export function OccupancyTaskArrows({
 
   const allLinksRaw = [...userLinks, ...devToQALinks];
   const allLinks = filterTaskLinksForSegmentEdit(allLinksRaw, segmentEditTaskId);
+  const segmentArrowLinks = buildOccupancySegmentArrowLinks(taskPositions, taskIdsOrder);
 
   const getRowTaskIds = useMemo(
     () => (taskId: string) =>
@@ -89,7 +90,7 @@ export function OccupancyTaskArrows({
     [devToQaTaskId, taskPositions, tasksMap]
   );
 
-  if (allLinks.length === 0) return null;
+  if (allLinks.length === 0 && segmentArrowLinks.length === 0) return null;
 
   return (
     <div
@@ -97,6 +98,35 @@ export function OccupancyTaskArrows({
       className="absolute inset-0 overflow-hidden pointer-events-none"
       style={{ zIndex: ZIndex.contentOverlay }}
     >
+      {segmentArrowLinks.map((link) => {
+        const task = tasksMap.get(link.taskId);
+        const baseColor = getPhaseLinkArrowDefaultHex(
+          phaseCardColorScheme,
+          task?.originalStatus,
+          task?.statusColorKey
+        );
+        const bothEndsVisible =
+          visibleIdsCtx == null || visibleIdsCtx.visibleTaskIds.has(link.taskId);
+        if (!bothEndsVisible) return null;
+
+        return (
+          <Xarrow
+            key={link.id}
+            animateDrawing={false}
+            color={hexToRgbaArrow(baseColor, 0.5)}
+            curveness={0.3}
+            dashness
+            end={link.endElement}
+            endAnchor="left"
+            headSize={4}
+            path="smooth"
+            start={link.startElement}
+            startAnchor="right"
+            strokeWidth={2}
+            zIndex={ZIndex.contentOverlay}
+          />
+        );
+      })}
       {allLinks.map((link) => {
         const fromTask = tasksMap.get(link.fromTaskId);
         const isDevQALink = link.id.startsWith(TASK_ARROWS_DEV_QA_LINK_PREFIX);

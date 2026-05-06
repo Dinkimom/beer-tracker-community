@@ -14,6 +14,7 @@ import {
   CONTEXT_MENU_ITEM_ROW_SUBMENU,
 } from '@/features/context-menu/contextMenuClasses';
 import { calculateSubmenuPosition } from '@/features/context-menu/utils/submenuPositioning';
+import { getTaskTrackerDisplayKey } from '@/features/task/utils/taskUtils';
 import { type TransitionItem, getIssueTransitions } from '@/lib/beerTrackerApi';
 import { DELAYS } from '@/utils/constants';
 import { getStatusColors } from '@/utils/statusColors';
@@ -63,7 +64,7 @@ export function StatusSubmenu({
 
     const loadTransitions = async () => {
       try {
-        const transitions = await getIssueTransitions(taskIdForActions);
+        const transitions = await getIssueTransitions(getTaskTrackerDisplayKey(task));
         if (!cancelled) {
           const transitionsArray = Array.isArray(transitions) ? transitions : [];
           setStatusTransitions(transitionsArray);

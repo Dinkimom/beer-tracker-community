@@ -5,14 +5,16 @@
 import type { MoveTasksTo } from '@/types';
 import type { SprintListItem } from '@/types/tracker';
 
-import { Select } from '@/components/Select';
+import { useMemo } from 'react';
 
-import { FinishSprintMoveTasksRadio } from './FinishSprintMoveTasksRadio';
+import { CustomSelect, type CustomSelectOption } from '@/components/CustomSelect';
+
 import { formatDraftSprintOptionLabel } from './finishSprintTaskTransferHelpers';
+
+type SprintSelectValue = '' | `${number}`;
 
 interface FinishSprintTaskTransferProps {
   draftSprints: SprintListItem[];
-  isDark: boolean;
   moveTasksTo: MoveTasksTo;
   selectedSprintId: number | null;
   onMoveTasksToChange: (value: MoveTasksTo) => void;
@@ -21,53 +23,71 @@ interface FinishSprintTaskTransferProps {
 
 export function FinishSprintTaskTransfer({
   draftSprints,
-  isDark,
   moveTasksTo,
   selectedSprintId,
   onMoveTasksToChange,
   onSelectedSprintIdChange,
 }: FinishSprintTaskTransferProps) {
+  const moveTaskOptions: CustomSelectOption<MoveTasksTo>[] = [
+    { label: 'В бэклог', value: 'backlog' },
+    { label: 'В спринт', value: 'sprint' },
+  ];
+
+  const sprintOptions = useMemo<CustomSelectOption<SprintSelectValue>[]>(
+    () => [
+      {
+        disabled: true,
+        label: draftSprints.length > 0 ? 'Выберите спринт' : 'Нет доступных draft-спринтов',
+        value: '',
+      },
+      ...draftSprints.map((sprint) => ({
+        label: formatDraftSprintOptionLabel(sprint),
+        value: String(sprint.id) as SprintSelectValue,
+      })),
+    ],
+    [draftSprints]
+  );
+
+  const selectedSprintValue: SprintSelectValue = selectedSprintId === null
+    ? ''
+    : String(selectedSprintId) as SprintSelectValue;
+
   return (
     <div>
       <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
         Перенести незавершенные задачи
       </h3>
-      <div className="space-y-3">
-        <FinishSprintMoveTasksRadio
-          checked={moveTasksTo === 'backlog'}
-          isDark={isDark}
-          label="В бэклог"
-          name="moveTasksTo"
-          value="backlog"
-          onSelect={() => {
-            onMoveTasksToChange('backlog');
-            onSelectedSprintIdChange(null);
-          }}
-        />
-        <FinishSprintMoveTasksRadio
-          checked={moveTasksTo === 'sprint'}
-          isDark={isDark}
-          label="В спринт"
-          name="moveTasksTo"
-          value="sprint"
-          onSelect={() => onMoveTasksToChange('sprint')}
-        />
-        {moveTasksTo === 'sprint' && (
-          <div className="ml-6">
-            <Select
-              className="py-2 text-sm rounded-md focus:ring-2 focus:ring-blue-500"
-              value={selectedSprintId || ''}
-              onChange={(e) =>
-                onSelectedSprintIdChange(e.target.value ? parseInt(e.target.value, 10) : null)
+      <div className="space-y-3 max-w-md">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Куда переносить
+          </label>
+          <CustomSelect<MoveTasksTo>
+            options={moveTaskOptions}
+            value={moveTasksTo}
+            onChange={(value) => {
+              onMoveTasksToChange(value);
+              if (value === 'backlog') {
+                onSelectedSprintIdChange(null);
               }
-            >
-              <option value="">Выберите спринт</option>
-              {draftSprints.map((sprint) => (
-                <option key={sprint.id} value={sprint.id}>
-                  {formatDraftSprintOptionLabel(sprint)}
-                </option>
-              ))}
-            </Select>
+            }}
+          />
+        </div>
+        {moveTasksTo === 'sprint' && (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Целевой спринт
+            </label>
+            <CustomSelect<SprintSelectValue>
+              searchable
+              disabled={draftSprints.length === 0}
+              options={sprintOptions}
+              searchPlaceholder="Поиск спринта..."
+              value={selectedSprintValue}
+              onChange={(value) => {
+                onSelectedSprintIdChange(value ? parseInt(value, 10) : null);
+              }}
+            />
           </div>
         )}
       </div>

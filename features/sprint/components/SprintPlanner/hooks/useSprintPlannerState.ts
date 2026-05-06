@@ -51,7 +51,7 @@ export function useSprintPlannerState({ selectedBoardId, selectedSprintId }: Use
 
   const getTaskInfoRef = useRef<GetTaskInfoFn | undefined>(undefined);
 
-  const [taskPositions, setTaskPositions, savePosition, deletePosition] = useTaskPositionsApi(
+  const [taskPositions, setTaskPositions, savePosition, deletePosition, positionHistory] = useTaskPositionsApi(
     selectedSprintId,
     getTaskInfoRef
   );
@@ -99,6 +99,7 @@ export function useSprintPlannerState({ selectedBoardId, selectedSprintId }: Use
     setTaskPositions,
     savePosition,
     deletePosition,
+    positionHistory,
     taskLinks,
     setTaskLinks,
     saveLink,
