@@ -13,9 +13,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useDemoPlannerBoardsQueryScope } from '@/features/board/demoPlannerBoardsQueryScope';
+import { reconcileTasksAfterPlanHistoryStep } from '@/features/sprint/components/SprintPlanner/utils/reconcileTasksAfterPlanHistoryStep';
 import { patchSprintTasksQuery, useTasks } from '@/features/task/hooks/useTasks';
 import { useTaskPositionsApi, useTaskLinksApi, useCommentsApi } from '@/hooks/useApiStorage';
-import { useBoardViewModeStorage, useSidebarWidthStorage } from '@/hooks/useLocalStorage';
+import { useBoardViewModeStorage, useSidebarWidthStorage, useDataSyncEstimatesStorage } from '@/hooks/useLocalStorage';
+import type { PlanHistoryAppliedPayload } from '@/lib/layers/application/mobx/stores/taskPositionsStore';
+import { useRootStore } from '@/lib/layers';
 
 import { useTaskState } from '../../../hooks/useTaskState';
 
@@ -26,6 +29,8 @@ interface UseSprintPlannerStateProps {
 
 export function useSprintPlannerState({ selectedBoardId, selectedSprintId }: UseSprintPlannerStateProps) {
   const queryClient = useQueryClient();
+  const { taskPositions: positionsStore } = useRootStore();
+  const [syncEstimates] = useDataSyncEstimatesStorage();
   const forDemoPlanner = useDemoPlannerBoardsQueryScope();
   const tasksQuery = useTasks(selectedSprintId, selectedBoardId);
 
@@ -69,6 +74,23 @@ export function useSprintPlannerState({ selectedBoardId, selectedSprintId }: Use
         : { isQa: false };
     };
   }, [tasksMap, qaTasksByOriginalId]);
+
+  const historyReconcileCtxRef = useRef({
+    developers,
+    syncEstimates,
+    tasksMap,
+  });
+  historyReconcileCtxRef.current = { developers, syncEstimates, tasksMap };
+
+  useEffect(() => {
+    const handler = (payload: PlanHistoryAppliedPayload) => {
+      reconcileTasksAfterPlanHistoryStep(payload, historyReconcileCtxRef.current, setTasks);
+    };
+    positionsStore.setOnPlanHistoryApplied(handler);
+    return () => {
+      positionsStore.setOnPlanHistoryApplied(undefined);
+    };
+  }, [positionsStore, setTasks]);
 
   // taskPositions — тот же observable.map (стабильная ссылка); при DnD/сохранении/удалении мутирует на месте.
   // useMemo([taskPositions, …]) не пересчитывается — см. useTaskState.ts; занятость получала «замороженные» фазы.

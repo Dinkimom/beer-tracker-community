@@ -18,6 +18,15 @@ import { DELAYS } from '@/utils/constants';
 
 interface PendingUpdate { devTaskKey?: string; isQa: boolean; position: TaskPosition }
 
+/** Одна сохранённая позиция после шага undo/redo — для сведения задач и оценок с трекером. */
+export interface PlanHistoryAppliedSave {
+  devTaskKey?: string;
+  isQa: boolean;
+  position: TaskPosition;
+}
+
+export type PlanHistoryAppliedPayload = { saves: PlanHistoryAppliedSave[] };
+
 export interface PositionHistoryOptions {
   recordHistory?: boolean;
 }
@@ -73,6 +82,8 @@ export class TaskPositionsStore {
 
   private isApplyingHistory = false;
 
+  private onPlanHistoryApplied?: (payload: PlanHistoryAppliedPayload) => void;
+
   constructor() {
     makeObservable(this, {
       deletePosition: action,
@@ -85,6 +96,7 @@ export class TaskPositionsStore {
       redo: action,
       redoStack: observable.shallow,
       savePosition: action,
+      setOnPlanHistoryApplied: action,
       setPositionsWithSave: action,
       setResolveGetTaskInfo: action,
       setSyncAssigneesFlag: action,
@@ -162,6 +174,20 @@ export class TaskPositionsStore {
     };
   }
 
+  private notifyPlanHistoryApplied(values: Map<string, PositionHistoryValue>): void {
+    if (!this.onPlanHistoryApplied) return;
+
+    const saves: PlanHistoryAppliedSave[] = [];
+    values.forEach((position) => {
+      if (position != null) {
+        saves.push(this.getPendingUpdateForPosition(position));
+      }
+    });
+    if (saves.length === 0) return;
+
+    this.onPlanHistoryApplied({ saves });
+  }
+
   private async syncHistoryStepValues(values: Map<string, PositionHistoryValue>): Promise<void> {
     if (!isValidSprintId(this.sprintId)) return;
     const sprintId = this.sprintId!;
@@ -215,6 +241,7 @@ export class TaskPositionsStore {
     this.isApplyingHistory = true;
     this.applyHistoryValues(step.before);
     this.isApplyingHistory = false;
+    this.notifyPlanHistoryApplied(step.before);
     this.redoStack.push(step);
     void this.syncHistoryStepValues(step.before);
   }
@@ -226,8 +253,13 @@ export class TaskPositionsStore {
     this.isApplyingHistory = true;
     this.applyHistoryValues(step.after);
     this.isApplyingHistory = false;
+    this.notifyPlanHistoryApplied(step.after);
     this.undoStack.push(step);
     void this.syncHistoryStepValues(step.after);
+  }
+
+  setOnPlanHistoryApplied(handler?: (payload: PlanHistoryAppliedPayload) => void): void {
+    this.onPlanHistoryApplied = handler;
   }
 
   setResolveGetTaskInfo(fn: () => GetTaskInfoFn | undefined): void {

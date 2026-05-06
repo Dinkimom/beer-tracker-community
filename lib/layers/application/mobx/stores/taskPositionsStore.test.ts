@@ -35,6 +35,30 @@ describe('TaskPositionsStore', () => {
     vi.clearAllMocks();
   });
 
+  it('undo вызывает onPlanHistoryApplied с восстановленными позициями', async () => {
+    mockFetch.mockResolvedValue([]);
+
+    const store = new TaskPositionsStore();
+    await store.loadSprint(42);
+
+    const handler = vi.fn();
+    store.setOnPlanHistoryApplied(handler);
+
+    await store.savePosition(pos('t1', 2), false, undefined, true, { recordHistory: true });
+    await store.savePosition(pos('t1', 5), false, undefined, true, { recordHistory: true });
+
+    handler.mockClear();
+    store.undo();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    const payload = handler.mock.calls[0]![0];
+    expect(payload.saves).toHaveLength(1);
+    expect(payload.saves[0]!.position.taskId).toBe('t1');
+    expect(payload.saves[0]!.position.startDay).toBe(2);
+
+    store.setOnPlanHistoryApplied(undefined);
+  });
+
   it('устаревший ответ fetchSprintPositions после локального savePosition не затирает карту', async () => {
     let resolveFetch!: (value: TaskPosition[]) => void;
     const fetchPromise = new Promise<TaskPosition[]>((r) => {
